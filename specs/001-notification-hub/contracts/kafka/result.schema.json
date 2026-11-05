@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pnh.example.com/schemas/notification-result.v1.json",
+  "title": "PNH Notification Result v1",
+  "description": "Published on SENT, DELIVERED, FAILED. Key = user_id (fallback client_id:client_request_id when user_id is null for rejected ingest messages). Superset of the technical-input example (additive fields only).",
+  "type": "object",
+  "required": [
+    "event_id",
+    "notification_id",
+    "client_id",
+    "client_request_id",
+    "status",
+    "sequence",
+    "timestamp"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "De-duplication key"
+    },
+    "notification_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "client_id": {
+      "type": "string"
+    },
+    "client_request_id": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Null only for FAILED results of ingest messages rejected before user_id could be read (validation errors)"
+    },
+    "channel_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SENT",
+        "DELIVERED",
+        "FAILED"
+      ]
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Never contains OTP values or secrets"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic per notification"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "event_id": "0b6f6c1e-4d1b-4c1f-9a8e-2f0e5b7f9a11",
+      "notification_id": "01933b6e-8f2a-7c4e-9d3b-1a2b3c4d5e6f",
+      "client_id": "auth-service",
+      "client_request_id": "req-unique-uuid-12345",
+      "user_id": "user_99",
+      "channel_type": "EMAIL",
+      "status": "DELIVERED",
+      "error_code": null,
+      "error_message": null,
+      "sequence": 2,
+      "timestamp": "2026-11-03T13:22:00Z"
+    }
+  ]
+}

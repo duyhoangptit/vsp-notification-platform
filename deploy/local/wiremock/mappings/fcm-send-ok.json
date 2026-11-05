@@ -1,0 +1,9 @@
+{
+  "priority": 10,
+  "request": { "method": "POST", "urlPathPattern": "/v1/projects/[^/]+/messages:send" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "name": "projects/pnh-local/messages/{{randomValue length=16 type='NUMERIC'}}" }
+  }
+}

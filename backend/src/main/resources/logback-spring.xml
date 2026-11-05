@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <conversionRule conversionWord="maskedMsg" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
+
+    <springProfile name="local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} [nid=%X{notification_id:-} crid=%X{client_request_id:-} cid=%X{client_id:-} trace=%X{traceId:-}] - %maskedMsg%n%ex</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="!local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp><timeZone>UTC</timeZone></timestamp>
+                    <logLevel/>
+                    <loggerName/>
+                    <threadName/>
+                    <pattern>
+                        <pattern>{"message":"%maskedMsg"}</pattern>
+                    </pattern>
+                    <mdc>
+                        <includeMdcKeyName>notification_id</includeMdcKeyName>
+                        <includeMdcKeyName>client_request_id</includeMdcKeyName>
+                        <includeMdcKeyName>client_id</includeMdcKeyName>
+                        <includeMdcKeyName>traceId</includeMdcKeyName>
+                        <includeMdcKeyName>spanId</includeMdcKeyName>
+                    </mdc>
+                    <stackTrace/>
+                </providers>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="org.redisson" level="WARN"/>
+</configuration>

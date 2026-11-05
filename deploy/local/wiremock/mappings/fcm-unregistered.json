@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST", "urlPathPattern": "/v1/projects/[^/]+/messages:send",
+    "bodyPatterns": [ { "matchesJsonPath": "$.message[?(@.token == 'unregistered-token')]" } ]
+  },
+  "response": {
+    "status": 404,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "error": { "code": 404, "message": "Requested entity was not found.", "status": "NOT_FOUND",
+      "details": [ { "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError", "errorCode": "UNREGISTERED" } ] } }
+  }
+}

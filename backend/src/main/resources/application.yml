@@ -1,0 +1,148 @@
+spring:
+  application:
+    name: pnh
+  threads:
+    virtual:
+      enabled: false
+  datasource:
+    url: ${PNH_DB_URL:jdbc:postgresql://localhost:5432/pnh}
+    username: ${PNH_DB_USER:pnh}
+    password: ${PNH_DB_PASSWORD:pnh}
+    hikari:
+      # size ≥ async listener threads that touch the DB concurrently (standard + otp + default executors)
+      maximum-pool-size: ${PNH_DB_POOL_SIZE:50}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    placeholder-replacement: false  # SQL holds template text such as ${otp_code}
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+  kafka:
+    bootstrap-servers: ${PNH_KAFKA:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: pnh
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual
+  mail:
+    host: localhost
+    port: 1025
+  modulith:
+    events:
+      jdbc:
+        schema-initialization:
+          enabled: false
+      completion-mode: delete
+      republish-outstanding-events-on-restart: false
+      externalization:
+        enabled: true
+  security:
+    user:
+      name: unused
+      password: unused-${random.uuid}
+  thymeleaf:
+    check-template-location: false
+  session:
+    jdbc:
+      initialize-schema: never   # tables come from Flyway V6
+
+server:
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        name: PNH_SESSION
+        http-only: true
+        same-site: lax
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  health:
+    mail:
+      enabled: false   # SMTP is configured per channel config, not via spring.mail
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-components: always   # component status only (redisAvailability: DEGRADED when Redis is down)
+      show-details: never
+      status:
+        order: down,out-of-service,degraded,up,unknown
+        http-mapping:   # a custom mapping replaces Boot's defaults: list every status
+          down: 503
+          out-of-service: 503
+          degraded: 200
+          up: 200
+          unknown: 200
+  metrics:
+    tags:
+      application: pnh
+  # OTLP export only when an endpoint is provided (Prometheus scraping is always available)
+  otlp:
+    metrics:
+      export:
+        enabled: ${PNH_OTLP_METRICS_ENABLED:false}
+        url: ${PNH_OTLP_METRICS_URL:http://localhost:4318/v1/metrics}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${PNH_OTLP_TRACES_URL:}
+  logging:
+    export:
+      otlp:
+        enabled: false
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: ${PNH_OTLP_TRACES_ENABLED:false}
+
+pnh:
+  jobs:
+    enabled: true
+  redis:
+    address: ${PNH_REDIS:redis://localhost:6379}
+  crypto:
+    # base64 of 32 random bytes; MUST be provided by the environment outside local/test
+    master-key: ${PNH_MASTER_KEY:}
+    master-key-id: ${PNH_MASTER_KEY_ID:k1}
+  clock:
+    mode: system
+    override-enabled: false
+  delivery:
+    stuck-timeout: 5m
+    processing-timeout: 15m
+  ratelimit:
+    replica-count: 1
+  kafka:
+    signature-required: true
+  retention:
+    months: 12
+    skip-when-clock-overridden: true
+  console:
+    base-url: http://localhost:5173

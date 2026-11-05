@@ -1,0 +1,10 @@
+.pnh-placeholder {
+  background: var(--mantine-color-indigo-1);
+  color: var(--mantine-color-indigo-9);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-family: var(--mantine-font-family-monospace);
+}
+.pnh-placeholder-invalid {
+  text-decoration: wavy underline var(--mantine-color-red-6);
+}

@@ -1,0 +1,671 @@
+openapi: 3.1.0
+info:
+  title: PNH Operator Console API
+  version: 1.0.0
+  description: |
+    Backend-for-frontend API for the operator console (same origin as the SPA).
+    Auth: session cookie from /console/api/auth/login + CSRF header `X-XSRF-TOKEN` on mutating calls.
+    Roles: ADMIN (all, incl. alert settings), TEMPLATE_EDITOR (templates RW, dashboard R), SUPPORT_VIEWER (dashboard R, notifications R).
+    Each operation lists `x-roles`. Forbidden → 403 code FORBIDDEN (server-side enforced, FR-026).
+    Config resources carry `version`; updates must send it, mismatch → 409 code VERSION_CONFLICT
+    with the latest representation in `current` (FR-033).
+servers:
+  - url: https://pnh.example.com
+security:
+  - session: []
+
+paths:
+  /console/api/auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Logged in; sets session cookie.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /console/api/auth/logout:
+    post: { operationId: logout, responses: { '204': { description: Logged out } } }
+  /console/api/auth/me:
+    get:
+      operationId: me
+      responses:
+        '200':
+          description: Current operator.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } }
+
+  /console/api/dashboard/volume:
+    get:
+      operationId: dashboardVolume
+      x-roles: [ADMIN, TEMPLATE_EDITOR, SUPPORT_VIEWER]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: granularity, in: query, required: true, schema: { type: string, enum: [HOUR, DAY] } }
+        - { name: client_id, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Volume buckets per channel.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        bucket_start: { type: string, format: date-time }
+                        counts: { type: object, additionalProperties: { type: integer }, example: { SMS: 120, EMAIL: 300, PUSH: 80 } }
+  /console/api/dashboard/channel-rates:
+    get:
+      operationId: dashboardChannelRates
+      x-roles: [ADMIN, TEMPLATE_EDITOR, SUPPORT_VIEWER]
+      description: success = SENT+DELIVERED, failure = FAILED, in-progress excluded from rate denominator.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Rates per channel.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    channel_type: { type: string }
+                    success_count: { type: integer }
+                    failure_count: { type: integer }
+                    in_progress_count: { type: integer }
+                    success_rate: { type: number, format: float }
+                    failure_rate: { type: number, format: float }
+
+  /console/api/templates:
+    get:
+      operationId: listTemplates
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: channel_type, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, INACTIVE] } }
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Page of templates.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Template' } }
+                  total: { type: integer }
+    post:
+      operationId: createTemplate
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TemplateInput' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Template' } } } }
+        '409': { $ref: '#/components/responses/Problem' }   # TEMPLATE_CODE_EXISTS
+        '422': { $ref: '#/components/responses/Problem' }   # INVALID_PLACEHOLDER, MISSING_FIELD...
+  /console/api/templates/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTemplate
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Template' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: updateTemplate
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/TemplateInput'
+                - type: object
+                  required: [version]
+                  properties: { version: { type: integer } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Template' } } } }
+        '409': { $ref: '#/components/responses/Problem' }   # VERSION_CONFLICT
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deactivateTemplate
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      description: Soft delete — sets status INACTIVE (FR-021).
+      parameters:
+        - { name: version, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Deactivated, content: { application/json: { schema: { $ref: '#/components/schemas/Template' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+  /console/api/templates/{code}/activate:
+    post:
+      operationId: activateTemplate
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+        - { name: version, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Activated, content: { application/json: { schema: { $ref: '#/components/schemas/Template' } } } }
+  /console/api/templates/preview:
+    post:
+      operationId: previewTemplate
+      x-roles: [ADMIN, TEMPLATE_EDITOR]
+      description: Render unsaved or saved template content with sample variables; nothing is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel_type, body_template, variables]
+              properties:
+                channel_type: { type: string }
+                subject_template: { type: string }
+                title_template: { type: string }
+                body_template: { type: string }
+                variables: { type: object, additionalProperties: { type: string } }
+      responses:
+        '200':
+          description: Rendered output.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subject: { type: string }
+                  title: { type: string }
+                  body: { type: string }
+                  character_count: { type: integer }
+                  sms_segments: { type: integer }
+                  missing_variables: { type: array, items: { type: string } }
+
+  /console/api/channel-configs:
+    get:
+      operationId: listChannelConfigs
+      x-roles: [ADMIN]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ChannelConfig' } } } } }
+    post:
+      operationId: createChannelConfig
+      x-roles: [ADMIN]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChannelConfigInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ChannelConfig' } } } }
+        '422': { $ref: '#/components/responses/Problem' }
+  /console/api/channel-configs/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: updateChannelConfig
+      x-roles: [ADMIN]
+      description: Secrets are write-only; omit a secret key to keep the current value. Effective without restart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ChannelConfigInput'
+                - type: object
+                  required: [version]
+                  properties: { version: { type: integer } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/ChannelConfig' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /console/api/channel-configs/{id}/test:
+    post:
+      operationId: testChannelConfig
+      x-roles: [ADMIN]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Test result (no message is delivered to real recipients).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider_error: { type: [string, 'null'] }
+                  tested_at: { type: string, format: date-time }
+
+  /console/api/notifications:
+    get:
+      operationId: searchNotifications
+      x-roles: [ADMIN, SUPPORT_VIEWER]
+      description: Newest first; recipient_target masked in results (FR-027). Requires a date range ≤ 31 days unless client_request_id is given.
+      parameters:
+        - { name: client_request_id, in: query, schema: { type: string } }
+        - { name: user_id, in: query, schema: { type: string } }
+        - { name: recipient_target, in: query, schema: { type: string } }
+        - { name: channel_type, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: client_id, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: Page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/NotificationSummary' } }
+                  total: { type: integer }
+  /console/api/notifications/{id}:
+    get:
+      operationId: getNotificationDetail
+      x-roles: [ADMIN, SUPPORT_VIEWER]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Detail with timeline; OTP masked; recipient shown in full.
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotificationDetail' } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /console/api/config-change-log:
+    get:
+      operationId: listConfigChangeLog
+      x-roles: [ADMIN]
+      parameters:
+        - { name: entity_type, in: query, schema: { type: string, enum: [CLIENT, TEMPLATE, USER_PREFERENCE, CHANNEL_CONFIG, OPERATOR, ALERT_RECIPIENT, ALERT_RULE, CLOCK_OVERRIDE] } }
+        - { name: entity_id, in: query, schema: { type: string } }
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      responses:
+        '200':
+          description: Page of audit entries, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ConfigAuditEntry' } }
+                  total: { type: integer }
+
+  /console/api/admin/clock:
+    description: Non-production only (pnh.clock.override-enabled=true); returns 404 when disabled. ADMIN only.
+    get:
+      operationId: getClock
+      x-roles: [ADMIN, TEMPLATE_EDITOR, SUPPORT_VIEWER]
+      description: Current system time and mode (all roles may read so the console can show the override banner).
+      security: [ { session: [] } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ClockState' } } } }
+    put:
+      operationId: overrideClock
+      x-roles: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [FIXED, OFFSET] }
+                fixed_instant: { type: string, format: date-time, description: Required for FIXED }
+                offset: { type: string, description: 'ISO-8601 duration, required for OFFSET, e.g. P30D or -PT2H' }
+      responses:
+        '200': { description: Applied to all instances, content: { application/json: { schema: { $ref: '#/components/schemas/ClockState' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: resetClock
+      x-roles: [ADMIN]
+      responses:
+        '200': { description: Back to SYSTEM, content: { application/json: { schema: { $ref: '#/components/schemas/ClockState' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /console/api/alerts/recipients:
+    get:
+      operationId: listAlertRecipients
+      x-roles: [ADMIN]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AlertRecipient' } } } } }
+    post:
+      operationId: addAlertRecipient
+      x-roles: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                display_name: { type: string, maxLength: 150 }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/AlertRecipient' } } } }
+        '409': { $ref: '#/components/responses/Problem' }   # RECIPIENT_EXISTS
+        '422': { $ref: '#/components/responses/Problem' }   # INVALID_FIELD
+  /console/api/alerts/recipients/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: updateAlertRecipient
+      x-roles: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                display_name: { type: string }
+                is_active: { type: boolean }
+                version: { type: integer }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/AlertRecipient' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: removeAlertRecipient
+      x-roles: [ADMIN]
+      parameters:
+        - { name: version, in: query, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Removed (audit entry DELETE written) }
+  /console/api/alerts/recipients/test:
+    post:
+      operationId: sendTestAlert
+      x-roles: [ADMIN]
+      description: Sends a test alert email to all active recipients through the alert mailer.
+      responses:
+        '200':
+          description: Result per recipient.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  send_status: { type: string, enum: [SENT, SEND_FAILED, NO_RECIPIENTS] }
+                  error: { type: [string, 'null'] }
+  /console/api/alerts/rules:
+    get:
+      operationId: listAlertRules
+      x-roles: [ADMIN]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AlertRule' } } } } }
+  /console/api/alerts/rules/{rule_code}:
+    put:
+      operationId: updateAlertRule
+      x-roles: [ADMIN]
+      parameters:
+        - { name: rule_code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, threshold, window_minutes, cooldown_minutes, version]
+              properties:
+                enabled: { type: boolean }
+                threshold: { type: number, minimum: 0 }
+                window_minutes: { type: integer, minimum: 1, maximum: 1440 }
+                min_sample: { type: [integer, 'null'], minimum: 1 }
+                cooldown_minutes: { type: integer, minimum: 5, maximum: 1440 }
+                version: { type: integer }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/AlertRule' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /console/api/alerts/events:
+    get:
+      operationId: listAlertEvents
+      x-roles: [ADMIN]
+      parameters:
+        - { name: rule_code, in: query, schema: { type: string } }
+        - { name: channel_type, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      responses:
+        '200':
+          description: Alert history, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AlertEvent' } }
+                  total: { type: integer }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: PNH_SESSION
+  responses:
+    Problem:
+      description: Error (RFC 9457; `code` e.g. FORBIDDEN, VERSION_CONFLICT, TEMPLATE_CODE_EXISTS, INVALID_PLACEHOLDER, INVALID_FIELD; VERSION_CONFLICT includes `current`).
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              type: { type: string }
+              title: { type: string }
+              status: { type: integer }
+              code: { type: string }
+              detail: { type: string }
+              errors: { type: array, items: { type: object, properties: { field: { type: string }, message: { type: string } } } }
+              current: { type: object, description: Latest representation on VERSION_CONFLICT }
+  schemas:
+    Me:
+      type: object
+      properties:
+        username: { type: string }
+        display_name: { type: string }
+        role: { type: string, enum: [ADMIN, TEMPLATE_EDITOR, SUPPORT_VIEWER] }
+    Audit:
+      type: object
+      properties:
+        created_at: { type: string, format: date-time }
+        created_by: { type: string }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: string }
+        version: { type: integer }
+    TemplateInput:
+      type: object
+      required: [template_code, template_name, channel_type, category, body_template]
+      properties:
+        template_code: { type: string, pattern: '^[A-Z0-9_]{3,100}$' }
+        template_name: { type: string, maxLength: 150 }
+        channel_type: { type: string }
+        category: { type: string, enum: [STANDARD, OTP] }
+        is_critical: { type: boolean, default: false }
+        otp_variable: { type: string, description: Required when category=OTP (default otp_code) }
+        expiry_variable:
+          type: [string, 'null']
+          description: OTP only. Variable holding validity in minutes (integer 1..1440), e.g. expired_minutes; used to derive expires_at when the request omits it.
+        subject_template: { type: string, maxLength: 255, description: Required for EMAIL }
+        title_template: { type: string, maxLength: 255, description: Required for PUSH }
+        body_template: { type: string, description: 'HTML for EMAIL; placeholders ${name}' }
+        external_template_ref:
+          type: [object, 'null']
+          description: Provider-side template mapping, required when the channel requires external templates (e.g. Zalo ZNS template id).
+    Template:
+      allOf:
+        - $ref: '#/components/schemas/TemplateInput'
+        - $ref: '#/components/schemas/Audit'
+        - type: object
+          properties:
+            status: { type: string, enum: [ACTIVE, INACTIVE] }
+            required_variables: { type: array, items: { type: string } }
+    ChannelConfigInput:
+      type: object
+      required: [channel_type, provider_key, settings]
+      properties:
+        channel_type: { type: string }
+        provider_key:
+          type: string
+          description: v1 SMTP, FCM, ANDROID_SMS_GATEWAY, GENERIC_HTTP_SMS; deferred SENDGRID; future ZALO_ZNS (open set validated against registered providers).
+        is_active: { type: boolean }
+        settings:
+          type: object
+          description: Non-secret settings, schema per provider_key (e.g. SMTP host/port/tls/from; FCM project_id; SMS endpoint/sender/brandname).
+        secrets:
+          type: object
+          writeOnly: true
+          additionalProperties: { type: string }
+          description: e.g. SMTP password, SendGrid api_key + webhook_public_key, FCM service_account_json, SMS api_key/api_secret/callback_hmac_secret.
+    ChannelConfig:
+      allOf:
+        - $ref: '#/components/schemas/Audit'
+        - type: object
+          properties:
+            id: { type: integer }
+            channel_type: { type: string }
+            provider_key: { type: string }
+            is_active: { type: boolean }
+            settings: { type: object }
+            secrets:
+              type: object
+              description: Masked view only.
+              additionalProperties:
+                type: object
+                properties:
+                  has_value: { type: boolean }
+                  masked: { type: string, example: '********' }
+            last_test_at: { type: [string, 'null'], format: date-time }
+            last_test_result: { type: [string, 'null'] }
+    NotificationSummary:
+      type: object
+      properties:
+        notification_id: { type: string, format: uuid }
+        client_id: { type: string }
+        client_request_id: { type: string }
+        user_id: { type: string }
+        recipient_target_masked: { type: string }
+        channel_type: { type: string }
+        category: { type: string }
+        template_code: { type: [string, 'null'] }
+        status: { type: string }
+        error_code: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    NotificationDetail:
+      allOf:
+        - $ref: '#/components/schemas/NotificationSummary'
+        - type: object
+          properties:
+            recipient_target: { type: string }
+            content_mode: { type: string, enum: [TEMPLATE, DIRECT] }
+            template_version: { type: [integer, 'null'] }
+            subject: { type: [string, 'null'] }
+            title: { type: [string, 'null'] }
+            content: { type: string, description: OTP masked }
+            expires_at: { type: [string, 'null'], format: date-time }
+            opt_out_overridden: { type: boolean }
+            retry_count: { type: integer }
+            error_message: { type: [string, 'null'] }
+            timeline:
+              type: array
+              items:
+                type: object
+                properties:
+                  at: { type: string, format: date-time }
+                  event_type: { type: string }
+                  from_status: { type: [string, 'null'] }
+                  to_status: { type: [string, 'null'] }
+                  attempt: { type: [integer, 'null'] }
+                  provider_key: { type: [string, 'null'] }
+                  error_code: { type: [string, 'null'] }
+                  error_message: { type: [string, 'null'] }
+                  provider_response: { type: [object, 'null'] }
+    ClockState:
+      type: object
+      properties:
+        mode: { type: string, enum: [SYSTEM, FIXED, OFFSET] }
+        now: { type: string, format: date-time }
+        real_now: { type: string, format: date-time }
+        fixed_instant: { type: [string, 'null'], format: date-time }
+        offset: { type: [string, 'null'] }
+        override_enabled: { type: boolean }
+        changed_by: { type: [string, 'null'] }
+        changed_at: { type: [string, 'null'], format: date-time }
+    AlertRecipient:
+      allOf:
+        - $ref: '#/components/schemas/Audit'
+        - type: object
+          properties:
+            id: { type: integer }
+            email: { type: string, format: email }
+            display_name: { type: [string, 'null'] }
+            is_active: { type: boolean }
+    AlertRule:
+      allOf:
+        - $ref: '#/components/schemas/Audit'
+        - type: object
+          properties:
+            rule_code: { type: string, enum: [STUCK_DELIVERY_SPIKE, PROVIDER_UNAVAILABLE, CHANNEL_FAILURE_RATE, INGEST_REJECTED_SPIKE] }
+            description: { type: string }
+            enabled: { type: boolean }
+            threshold: { type: number }
+            threshold_unit: { type: string, enum: [COUNT, MINUTES, PERCENT] }
+            window_minutes: { type: integer }
+            min_sample: { type: [integer, 'null'] }
+            cooldown_minutes: { type: integer }
+    AlertEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        rule_code: { type: string }
+        channel_type: { type: [string, 'null'] }
+        kind: { type: string, enum: [FIRED, RESOLVED] }
+        measured_value: { type: number }
+        threshold: { type: number }
+        window_minutes: { type: integer }
+        occurred_at: { type: string, format: date-time }
+        recipients: { type: array, items: { type: string } }
+        send_status: { type: string, enum: [SENT, SEND_FAILED, NO_RECIPIENTS] }
+        send_error: { type: [string, 'null'] }
+        details: { type: object }
+    ConfigAuditEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        action: { type: string, enum: [CREATE, UPDATE, DEACTIVATE, DELETE] }
+        version: { type: integer }
+        changed_fields: { type: object, additionalProperties: { type: object, properties: { old: {}, new: {} } } }
+        actor: { type: string }
+        occurred_at: { type: string, format: date-time }

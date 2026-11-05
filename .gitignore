@@ -1,0 +1,27 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+*.iml
+# Java / Maven
+backend/target/
+out/
+*.class
+*.log
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+# Env / secrets
+.env*
+*.secret.yaml
+*.key
+
+# Build/tool state
+*.tsbuildinfo
+.claude/settings.local.json

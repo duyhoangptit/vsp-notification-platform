@@ -1,0 +1,20 @@
+# Provisioning CLI: java -jar pnh.jar --spring.profiles.active=cli <command> [--option=value ...]
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+  datasource:
+    hikari:
+      maximum-pool-size: 2   # one-shot command next to a running hub: do not take a server-sized pool
+      minimum-idle: 1
+  kafka:
+    admin:
+      auto-create: false
+pnh:
+  jobs:
+    enabled: false
+  kafka:
+    listeners-enabled: false
+logging:
+  level:
+    root: WARN

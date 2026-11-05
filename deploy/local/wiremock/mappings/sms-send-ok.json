@@ -1,0 +1,9 @@
+{
+  "priority": 10,
+  "request": { "method": "POST", "urlPath": "/sms/send" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "message_id": "wm-{{randomValue length=12 type='ALPHANUMERIC'}}", "request_id": "{{jsonPath request.body '$.request_id'}}" }
+  }
+}

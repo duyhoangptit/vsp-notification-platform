@@ -1,0 +1,103 @@
+openapi: 3.1.0
+info:
+  title: PNH Provider Delivery Callbacks
+  version: 1.0.0
+  description: |
+    Inbound delivery reports from channel providers (FR-017). Every callback is authenticated before any
+    state change; unverifiable or unmatched callbacks return 2xx/4xx as noted, are logged as
+    CALLBACK_IGNORED and never change notification state. Processing is idempotent and never moves a
+    status backwards — except FAILED(DELIVERY_STATE_UNKNOWN) → DELIVERED on a verified delivery report (spec FR-041).
+    SMTP (Mailtrap/Mailpit) and FCM provide no delivery reports (SENT is final for them).
+    Each verified callback for a notification is processed under lock `lock:notif:{id}` + conditional update.
+paths:
+  /api/v1/callbacks/email/sendgrid:
+    post:
+      operationId: sendgridEvents
+      summary: SendGrid Event Webhook (batch). DEFERRED — implemented only when the SendGrid adapter is built.
+      description: |
+        Verified with SendGrid signed-event-webhook headers
+        `X-Twilio-Email-Event-Webhook-Signature` + `X-Twilio-Email-Event-Webhook-Timestamp`
+        (ECDSA, public key from channel config; timestamp skew ≤ 5 min).
+        Matching via `custom_args.pnh_notification_id` sent with each message.
+        Mapping: delivered → DELIVERED; bounce, dropped → FAILED (BOUNCED / PROVIDER_REJECTED);
+        processed/deferred/open/click → timeline only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required: [event, timestamp]
+                properties:
+                  event: { type: string }
+                  timestamp: { type: integer }
+                  sg_message_id: { type: string }
+                  pnh_notification_id: { type: string, format: uuid }
+                  reason: { type: string }
+      responses:
+        '204': { description: Accepted (including ignored unmatched events) }
+        '401': { description: Signature invalid }
+
+  /api/v1/callbacks/sms/android-sms-gateway:
+    post:
+      operationId: androidSmsGatewayWebhook
+      summary: SMS Gateway for Android webhook (v1 default free SMS gateway).
+      description: |
+        Registered on the gateway for events `sms:sent`, `sms:delivered`, `sms:failed`.
+        Authenticity: signature headers per the gateway's webhook-signing docs (HMAC-SHA256 with the
+        signing key stored in channel config secrets; exact header names verified at implementation)
+        plus timestamp skew ≤ 5 min. Match key: PNH sends its notification_id as the gateway message id when the
+        gateway API accepts a client-supplied id (verify in its docs; preferred), otherwise the gateway message id
+        returned at send (= provider_message_id). A verified sms:delivered/sms:failed may arrive while the notification
+        is still SENDING and is applied directly (SENDING→DELIVERED|FAILED).
+        Mapping: sms:sent → timeline only (already SENT); sms:delivered → DELIVERED; sms:failed → FAILED (PROVIDER_REJECTED).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event, payload]
+              properties:
+                event: { type: string, enum: ['sms:received', 'sms:sent', 'sms:delivered', 'sms:failed'] }
+                deviceId: { type: string }
+                webhookId: { type: string }
+                payload:
+                  type: object
+                  properties:
+                    messageId: { type: string }
+                    phoneNumber: { type: string }
+                    reason: { type: string }
+      responses:
+        '204': { description: Accepted (unmatched/irrelevant events ignored) }
+        '401': { description: Signature invalid }
+
+  /api/v1/callbacks/sms/{provider_key}:
+    post:
+      operationId: smsDeliveryReport
+      summary: Generic SMS gateway delivery report (hub-defined contract).
+      description: |
+        Header `X-PNH-Signature: sha256=<hex HMAC-SHA256(callback_hmac_secret, timestamp + "." + raw_body)>`
+        and `X-PNH-Timestamp: <epoch seconds>` (skew ≤ 5 min). Vendors that cannot meet this contract get a
+        vendor-specific mapper behind the same endpoint path.
+      parameters:
+        - { name: provider_key, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message_id, status, reported_at]
+              properties:
+                message_id: { type: string, description: provider_message_id returned at send time }
+                request_id: { type: string, description: 'PNH notification_id echoed back (preferred match key; PNH always sends it as request_id)' }
+                status: { type: string, enum: [DELIVERED, FAILED, EXPIRED, REJECTED] }
+                error_code: { type: string }
+                error_message: { type: string }
+                reported_at: { type: string, format: date-time }
+      responses:
+        '204': { description: Accepted }
+        '401': { description: Signature invalid }

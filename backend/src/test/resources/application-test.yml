@@ -1,0 +1,32 @@
+pnh:
+  jobs:
+    enabled: false   # tests trigger scheduled jobs explicitly (the clock is moved by tests)
+  crypto:
+    master-key: dGVzdC1tYXN0ZXIta2V5LTMyYnl0ZXMtLS0tLS0tLS0=
+    master-key-id: test-k1
+  clock:
+    override-enabled: true
+  resilience:
+    retry-initial-interval: 20ms
+    call-timeout: 2s
+    cb-wait-in-open: 30s
+  kafka:
+    signature-required: true
+    topic-partitions: 3
+  delivery:
+    stuck-timeout: 5m
+    processing-timeout: 15m
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20  # many cached test contexts + replicas share one Postgres:
+      minimum-idle: 1        # idle contexts shrink back to one connection after idle-timeout
+      idle-timeout: 10000
+  kafka:
+    consumer:
+      group-id: pnh-test
+logging:
+  level:
+    root: WARN
+    com.pnh: INFO
+    org.springframework.modulith: WARN

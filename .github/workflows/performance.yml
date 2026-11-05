@@ -1,0 +1,50 @@
+name: performance (nightly)
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  slo-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: maven }
+      - name: SLO suite (SC-004/007/010/012/017) — fails when a threshold is missed
+        run: ./mvnw -B -Pperformance verify -DskipITs=true -Dsurefire.skip=true -Djacoco.skip=true -Dspotless.check.skip=true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: slo-report
+          path: backend/target/reports/performance/
+
+  k6-load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: maven }
+      - name: Start local stack
+        run: docker compose -f deploy/local/compose.yaml up -d --wait
+      - name: Start backend (local profile)
+        working-directory: backend
+        run: |
+          ./mvnw -B -q -DskipTests package
+          nohup java -jar target/pnh.jar --spring.profiles.active=local > backend.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf localhost:8080/actuator/health && break; sleep 2; done
+          docker compose -f ../deploy/local/compose.yaml exec -T postgres \
+            psql -U pnh -d pnh -c "UPDATE pnh_clients SET rate_limit_per_min = 1000000 WHERE client_id='demo-client'"
+      - uses: grafana/setup-k6-action@v1
+      - name: k6 (p95 < 1 s at 500/s for 5 min)
+        run: k6 run deploy/local/k6/send-load.js -e RATE=500 -e DURATION=5m --summary-export k6-summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-report
+          path: |
+            k6-summary.json
+            backend/backend.log

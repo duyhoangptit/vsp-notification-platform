@@ -1,0 +1,11 @@
+{
+  "priority": 2,
+  "scenarioName": "sms-transient",
+  "requiredScenarioState": "Started",
+  "newScenarioState": "first-503",
+  "request": {
+    "method": "POST", "urlPath": "/sms/send",
+    "bodyPatterns": [ { "matchesJsonPath": "$[?(@.to =~ /.*000503$/)]" } ]
+  },
+  "response": { "status": 503, "jsonBody": { "error": "SERVICE_UNAVAILABLE" }, "headers": { "Content-Type": "application/json" } }
+}

@@ -1,0 +1,8 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST", "urlPath": "/sms/send",
+    "bodyPatterns": [ { "matchesJsonPath": "$[?(@.to =~ /.*000400$/)]" } ]
+  },
+  "response": { "status": 400, "headers": { "Content-Type": "application/json" }, "jsonBody": { "error": "INVALID_NUMBER", "message": "Destination number is invalid" } }
+}

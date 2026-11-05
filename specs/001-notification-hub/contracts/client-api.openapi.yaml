@@ -1,0 +1,354 @@
+openapi: 3.1.0
+info:
+  title: PNH Client API
+  version: 1.0.0
+  description: |
+    API used by registered client systems: send, track, user preferences and the in-app (PUSH) inbox.
+    Auth: HTTP Basic (client_id:client_secret). Scopes per client: SEND, TRACK, USER_DELEGATE.
+    Errors: RFC 9457 Problem Details with a stable `code` (see components.schemas.Problem).
+    JSON uses snake_case.
+servers:
+  - url: https://pnh.example.com
+security:
+  - clientBasic: []
+
+paths:
+  /api/v1/notifications/send:
+    post:
+      operationId: sendNotification
+      summary: Submit a notification (template mode or direct-content mode). Scope SEND.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendRequest' }
+            examples:
+              templateMode:
+                value:
+                  client_request_id: req-unique-uuid-12345
+                  user_id: user_99
+                  channel_type: EMAIL
+                  recipient_target: user@example.com
+                  template_code: OTP_VERIFICATION
+                  expires_at: '2026-11-03T13:27:00Z'
+                  variables: { otp_code: '654321', expired_minutes: '5' }
+              directMode:
+                value:
+                  client_request_id: req-124
+                  user_id: user_99
+                  channel_type: SMS
+                  recipient_target: '+84901234567'
+                  category: OTP
+                  otp_value: '654321'
+                  expires_at: '2026-11-03T13:27:00Z'
+                  content: { body: 'Ma OTP cua ban la 654321, hieu luc 5 phut.' }
+      responses:
+        '202':
+          description: Accepted (new request).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendAccepted' }
+        '200':
+          description: Duplicate client_request_id — original notification returned, nothing sent.
+          headers:
+            Idempotent-Replay: { schema: { type: string, enum: ['true'] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendAccepted' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429':
+          description: Rate limit exceeded (code RATE_LIMITED).
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/notifications/track/{client_request_id}:
+    get:
+      operationId: trackNotification
+      summary: Current status of the caller's own notification. Scope TRACK.
+      parameters:
+        - { name: client_request_id, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: Found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrackResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/users/{user_id}/preferences:
+    parameters:
+      - { name: user_id, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    get:
+      operationId: getPreferences
+      summary: Channel preferences of a user (missing channel ⇒ enabled). Scope USER_DELEGATE.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preferences' }
+    put:
+      operationId: updatePreferences
+      summary: Enable/disable channels for a user. Scope USER_DELEGATE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channels]
+              properties:
+                channels:
+                  type: object
+                  additionalProperties: { type: boolean }
+                  example: { EMAIL: false, SMS: true }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preferences' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/users/{user_id}/inbox:
+    get:
+      operationId: listInbox
+      summary: User's in-app inbox — PUSH, STANDARD notifications only, newest first. Scope USER_DELEGATE.
+      parameters:
+        - { name: user_id, in: path, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: unread_only, in: query, schema: { type: boolean, default: false } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxPage' }
+
+  /api/v1/notifications/{id}/read:
+    patch:
+      operationId: markRead
+      summary: Mark one inbox notification read (idempotent; first read_at preserved). Scope USER_DELEGATE.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/UserIdHeader'
+      responses:
+        '200':
+          description: Read state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReadState' }
+        '404':
+          description: Not found, not owned by user, or not an inbox (PUSH) notification.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/notifications/bulk-read:
+    post:
+      operationId: bulkMarkRead
+      summary: Mark up to 500 inbox notifications read. Scope USER_DELEGATE.
+      parameters:
+        - $ref: '#/components/parameters/UserIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [notification_ids]
+              properties:
+                notification_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated_count, not_found_ids]
+                properties:
+                  updated_count: { type: integer }
+                  not_found_ids: { type: array, items: { type: string, format: uuid } }
+        '422': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    clientBasic:
+      type: http
+      scheme: basic
+
+  parameters:
+    UserIdHeader:
+      name: X-User-Id
+      in: header
+      required: true
+      description: End user on whose behalf the client acts.
+      schema: { type: string, maxLength: 100 }
+
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    ChannelType:
+      type: string
+      description: Open set; currently SMS, EMAIL, PUSH (ZALO planned). Unknown/unregistered → 422 UNSUPPORTED_CHANNEL.
+      examples: [SMS, EMAIL, PUSH]
+    Status:
+      type: string
+      enum: [RECEIVED, PROCESSED, SENDING, SENT, DELIVERED, FAILED]
+
+    SendRequest:
+      type: object
+      description: Exactly one of `template_code` or `content` (else 422 CONTENT_MODE_CONFLICT).
+      required: [client_request_id, user_id, channel_type, recipient_target]
+      properties:
+        client_request_id: { type: string, minLength: 1, maxLength: 100 }
+        user_id: { type: string, minLength: 1, maxLength: 100 }
+        channel_type: { $ref: '#/components/schemas/ChannelType' }
+        recipient_target:
+          type: string
+          maxLength: 4096
+          description: E.164 phone (SMS), email (EMAIL), device token (PUSH).
+        template_code: { type: string, maxLength: 100 }
+        variables:
+          type: object
+          additionalProperties: { type: string, maxLength: 2000 }
+        category:
+          type: string
+          enum: [STANDARD, OTP]
+          description: Direct mode only (template mode uses the template's category). Default STANDARD.
+        otp_value:
+          type: string
+          maxLength: 20
+          description: Required in direct mode when category=OTP (used for masking).
+        expires_at:
+          type: string
+          format: date-time
+          description: |
+            OTP expiry; must be in the future. Required for direct-content OTP. For template-mode OTP it may be omitted
+            when the template declares `expiry_variable` (e.g. expired_minutes) — then expires_at = acceptance time + that
+            many minutes. Explicit value wins. No delivery attempt after this time.
+        content: { $ref: '#/components/schemas/DirectContent' }
+
+    DirectContent:
+      type: object
+      description: |
+        Channel requirements — EMAIL: subject + body (HTML allowed, ≤ 1 MB);
+        SMS: body (≤ 1,600 chars); PUSH: title + body, optional data (≤ 4 KB total).
+        EMAIL HTML is sanitized against a safe allowlist (scripts, iframes, forms, on* handlers, javascript: URLs removed).
+      properties:
+        subject: { type: string, maxLength: 255 }
+        title: { type: string, maxLength: 255 }
+        body: { type: string }
+        data:
+          type: object
+          additionalProperties: { type: string }
+
+    SendAccepted:
+      type: object
+      required: [notification_id, client_request_id, status, created_at]
+      properties:
+        notification_id: { type: string, format: uuid }
+        client_request_id: { type: string }
+        status: { $ref: '#/components/schemas/Status' }
+        created_at: { type: string, format: date-time }
+
+    TrackResponse:
+      type: object
+      required: [notification_id, client_request_id, channel_type, status, updated_at]
+      properties:
+        notification_id: { type: string, format: uuid }
+        client_request_id: { type: string }
+        channel_type: { $ref: '#/components/schemas/ChannelType' }
+        status: { $ref: '#/components/schemas/Status' }
+        error_code: { type: [string, 'null'] }
+        error_message: { type: [string, 'null'] }
+        retry_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+
+    Preferences:
+      type: object
+      required: [user_id, channels]
+      properties:
+        user_id: { type: string }
+        channels:
+          type: object
+          additionalProperties: { type: boolean }
+          example: { SMS: true, EMAIL: false, PUSH: true }
+
+    InboxItem:
+      type: object
+      required: [notification_id, title, body, created_at, is_read]
+      properties:
+        notification_id: { type: string, format: uuid }
+        title: { type: string }
+        body: { type: string }
+        data: { type: object, additionalProperties: { type: string } }
+        created_at: { type: string, format: date-time }
+        is_read: { type: boolean }
+        read_at: { type: [string, 'null'], format: date-time }
+
+    InboxPage:
+      type: object
+      required: [items, page, size, total, unread_count]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/InboxItem' } }
+        page: { type: integer }
+        size: { type: integer }
+        total: { type: integer }
+        unread_count: { type: integer }
+
+    ReadState:
+      type: object
+      required: [notification_id, is_read, read_at]
+      properties:
+        notification_id: { type: string, format: uuid }
+        is_read: { type: boolean }
+        read_at: { type: string, format: date-time }
+
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          description: |
+            Intake: UNAUTHORIZED, CLIENT_INACTIVE, SCOPE_DENIED, RATE_LIMITED, VALIDATION_ERROR,
+            CONTENT_MODE_CONFLICT, MISSING_CONTENT_FIELD, DIRECT_CONTENT_NOT_ALLOWED,
+            TEMPLATE_NOT_FOUND, TEMPLATE_INACTIVE, TEMPLATE_CHANNEL_MISMATCH, MISSING_VARIABLES,
+            INVALID_RECIPIENT, CONTENT_TOO_LONG, OTP_EXPIRY_REQUIRED, OTP_VALUE_REQUIRED,
+            UNSUPPORTED_CHANNEL, BULK_LIMIT_EXCEEDED, NOT_FOUND.
+            Delivery (in track/result): USER_OPTED_OUT, OTP_EXPIRED, CHANNEL_NOT_CONFIGURED,
+            DELIVERY_STATE_UNKNOWN (stuck in SENDING after crash; never re-sent), PROCESSING_TIMEOUT,
+            PROVIDER_UNAVAILABLE, PROVIDER_TIMEOUT, PROVIDER_REJECTED, PROVIDER_AUTH_FAILED,
+            INVALID_RECIPIENT, BOUNCED.
+        errors:
+          type: array
+          description: Field-level details for validation errors.
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+        missing_variables: { type: array, items: { type: string } }

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pnh.example.com/schemas/notification-ingest.v1.json",
+  "title": "PNH Notification Ingest v1",
+  "description": "Same shape as the REST SendRequest. Exactly one of template_code or content.",
+  "type": "object",
+  "required": ["client_request_id", "user_id", "channel_type", "recipient_target"],
+  "properties": {
+    "client_request_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "user_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "channel_type": { "type": "string", "description": "SMS | EMAIL | PUSH (open set, ZALO planned)" },
+    "recipient_target": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "template_code": { "type": "string", "maxLength": 100 },
+    "variables": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 2000 } },
+    "category": { "type": "string", "enum": ["STANDARD", "OTP"] },
+    "otp_value": { "type": "string", "maxLength": 20 },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "content": {
+      "type": "object",
+      "properties": {
+        "subject": { "type": "string", "maxLength": 255 },
+        "title": { "type": "string", "maxLength": 255 },
+        "body": { "type": "string" },
+        "data": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    { "required": ["template_code"], "not": { "required": ["content"] } },
+    { "required": ["content"], "not": { "required": ["template_code"] } }
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "category": { "const": "OTP" } }, "required": ["category", "content"] },
+      "then": { "required": ["otp_value", "expires_at"] }
+    }
+  ]
+}
