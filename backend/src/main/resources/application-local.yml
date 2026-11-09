@@ -10,3 +10,9 @@ pnh:
     override-enabled: true
   kafka:
     signature-required: false
+
+springdoc:
+  api-docs:
+    enabled: ${PNH_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${PNH_API_DOCS_ENABLED:true}

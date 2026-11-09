@@ -5,7 +5,7 @@ spring:
     virtual:
       enabled: false
   datasource:
-    url: ${PNH_DB_URL:jdbc:postgresql://localhost:5432/pnh}
+    url: ${PNH_DB_URL:jdbc:postgresql://localhost:15432/pnh}
     username: ${PNH_DB_USER:pnh}
     password: ${PNH_DB_PASSWORD:pnh}
     hikari:
@@ -25,7 +25,7 @@ spring:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
   kafka:
-    bootstrap-servers: ${PNH_KAFKA:localhost:9092}
+    bootstrap-servers: ${PNH_KAFKA:localhost:19092}
     producer:
       acks: all
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -146,3 +146,19 @@ pnh:
     skip-when-clock-overridden: true
   console:
     base-url: http://localhost:5173
+
+# OpenAPI / Swagger UI: renders the contract files (specs/001-notification-hub/contracts, copied to classpath:/openapi).
+# Off by default; enable with PNH_API_DOCS_ENABLED=true (on in the local profile).
+springdoc:
+  api-docs:
+    enabled: ${PNH_API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${PNH_API_DOCS_ENABLED:false}
+    urls-primary-name: client-api
+    urls:
+      - name: client-api
+        url: /openapi/client-api.openapi.yaml
+      - name: console-api
+        url: /openapi/console-api.openapi.yaml
+      - name: provider-callbacks
+        url: /openapi/provider-callbacks.openapi.yaml

@@ -30,6 +30,7 @@
         <owasp-html-sanitizer.version>20261103.2</owasp-html-sanitizer.version>
         <google-auth.version>1.55.0</google-auth.version>
         <logstash-encoder.version>9.0</logstash-encoder.version>
+        <springdoc.version>3.2.0</springdoc.version>
 
         <archunit.version>1.5.1</archunit.version>
         <wiremock.version>3.13.2</wiremock.version>
@@ -105,6 +106,8 @@
         <!-- FCM HTTP v1 OAuth (credential part of the Firebase Admin SDK; HTTP call done with RestClient so the base URL is overridable) -->
         <dependency><groupId>com.google.auth</groupId><artifactId>google-auth-library-oauth2-http</artifactId><version>${google-auth.version}</version></dependency>
         <dependency><groupId>net.logstash.logback</groupId><artifactId>logstash-logback-encoder</artifactId><version>${logstash-encoder.version}</version></dependency>
+        <!-- Swagger UI serving the hand-written contracts (contract-first; enabled per environment) -->
+        <dependency><groupId>org.springdoc</groupId><artifactId>springdoc-openapi-starter-webmvc-ui</artifactId><version>${springdoc.version}</version></dependency>
 
         <!-- Test -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
@@ -183,6 +186,15 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
                 <executions>
+                    <execution>
+                        <id>copy-contracts-main</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/openapi</outputDirectory>
+                            <resources><resource><directory>${pnh.contracts.dir}</directory><includes><include>*.openapi.yaml</include></includes></resource></resources>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>copy-contracts</id>
                         <phase>generate-test-resources</phase>
