@@ -150,10 +150,15 @@ pnh:
 # OpenAPI / Swagger UI: renders the contract files (specs/001-notification-hub/contracts, copied to classpath:/openapi).
 # Off by default; enable with PNH_API_DOCS_ENABLED=true (on in the local profile).
 springdoc:
+  # fully-qualified schema names: several DTOs share a simple name (e.g. Page), which would otherwise collapse
+  use-fqn: true
   api-docs:
     enabled: ${PNH_API_DOCS_ENABLED:false}
   swagger-ui:
     enabled: ${PNH_API_DOCS_ENABLED:false}
+    # "Try it out" on console-api: read the XSRF-TOKEN cookie and send it back as X-XSRF-TOKEN (SecurityConfig).
+    csrf:
+      enabled: true
     urls-primary-name: client-api
     urls:
       - name: client-api

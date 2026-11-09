@@ -8,7 +8,10 @@ info:
     Errors: RFC 9457 Problem Details with a stable `code` (see components.schemas.Problem).
     JSON uses snake_case.
 servers:
+  - url: http://localhost:8080
+    description: Local
   - url: https://pnh.example.com
+    description: Production
 security:
   - clientBasic: []
 

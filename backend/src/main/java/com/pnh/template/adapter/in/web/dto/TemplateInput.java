@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 
-/** console-api TemplateInput (+ version on update). */
+/** console-api TemplateInput + version, for {@code PUT /console/api/templates/{code}} (create uses {@link TemplateCreateInput}). */
 public record TemplateInput(
         @NotBlank @Pattern(regexp = "^[A-Z0-9_]{3,100}$") String templateCode,
         @NotBlank @Size(max = 150) String templateName,

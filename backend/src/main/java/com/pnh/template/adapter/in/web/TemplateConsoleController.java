@@ -1,5 +1,6 @@
 package com.pnh.template.adapter.in.web;
 
+import com.pnh.template.adapter.in.web.dto.TemplateCreateInput;
 import com.pnh.template.adapter.in.web.dto.TemplateInput;
 import com.pnh.template.adapter.in.web.dto.TemplateView;
 import com.pnh.template.application.TemplateCommandService;
@@ -53,8 +54,8 @@ class TemplateConsoleController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    TemplateView create(@Valid @RequestBody TemplateInput input) {
-        return commands.create(input);
+    TemplateView create(@Valid @RequestBody TemplateCreateInput input) {
+        return commands.create(input.toInput());
     }
 
     @GetMapping("/{code}")

@@ -13,6 +13,7 @@ paths:
   /api/v1/callbacks/email/sendgrid:
     post:
       operationId: sendgridEvents
+      x-pnh-deferred: true   # not implemented yet; ApiContractDriftIT fails once it is implemented and this flag stays
       summary: SendGrid Event Webhook (batch). DEFERRED — implemented only when the SendGrid adapter is built.
       description: |
         Verified with SendGrid signed-event-webhook headers

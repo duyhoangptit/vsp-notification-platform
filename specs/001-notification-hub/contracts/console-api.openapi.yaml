@@ -10,7 +10,10 @@ info:
     Config resources carry `version`; updates must send it, mismatch → 409 code VERSION_CONFLICT
     with the latest representation in `current` (FR-033).
 servers:
+  - url: http://localhost:8080
+    description: Local
   - url: https://pnh.example.com
+    description: Production
 security:
   - session: []
 

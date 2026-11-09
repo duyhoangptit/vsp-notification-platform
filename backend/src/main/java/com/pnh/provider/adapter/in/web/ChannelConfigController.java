@@ -23,6 +23,25 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('ADMIN')")
 class ChannelConfigController {
 
+    /** {@code POST}: ChannelConfigInput without {@code version} (update-only, see {@link ConfigInput}). */
+    record ConfigCreateInput(
+            @NotBlank String channelType,
+            @NotBlank String providerKey,
+            Boolean isActive,
+            @NotNull Map<String, Object> settings,
+            Map<String, String> secrets) {
+
+        ChannelConfigCommandService.Input toInput() {
+            return new ChannelConfigCommandService.Input(channelType, providerKey, isActive, settings, secrets, null);
+        }
+
+        @Override
+        public String toString() {
+            return "ConfigCreateInput[" + channelType + "/" + providerKey + "]";
+        }
+    }
+
+    /** {@code PUT}: ChannelConfigInput + {@code version}. */
     record ConfigInput(
             @NotBlank String channelType,
             @NotBlank String providerKey,
@@ -55,7 +74,7 @@ class ChannelConfigController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    ChannelConfigCommandService.ConfigView create(@Valid @RequestBody ConfigInput body) {
+    ChannelConfigCommandService.ConfigView create(@Valid @RequestBody ConfigCreateInput body) {
         return service.create(body.toInput());
     }
 

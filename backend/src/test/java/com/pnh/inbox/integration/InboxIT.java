@@ -37,6 +37,46 @@ class InboxIT extends StubbedProvidersTestBase {
                 .andReturn();
     }
 
+    /** FR-019/020: ids of another user's inbox are never marked, single or bulk, and are reported as not found. */
+    @Test
+    void otherUsersNotificationsAreNeverMarkedRead() throws Exception {
+        ClientCreds c = data.client("SEND,USER_DELEGATE");
+        String alice = "alice-" + UUID.randomUUID();
+        String bob = "bob-" + UUID.randomUUID();
+        UUID aliceItem = InboxSupport.push(mvc, c, tracking, jdbc, alice, "For Alice");
+        UUID bobItem1 = InboxSupport.push(mvc, c, tracking, jdbc, bob, "For Bob 1");
+        UUID bobItem2 = InboxSupport.push(mvc, c, tracking, jdbc, bob, "For Bob 2");
+
+        // single: Alice marks Bob's unread item
+        assertThat(markRead(c, alice, bobItem1).getResponse().getStatus()).isEqualTo(404);
+
+        // bulk: Alice's own id mixed with Bob's ids
+        MvcResult bulk = mvc.perform(post("/api/v1/notifications/bulk-read")
+                        .header("Authorization", c.basic())
+                        .header("X-User-Id", alice)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"notification_ids\":[\"" + aliceItem + "\",\"" + bobItem1 + "\",\"" + bobItem2
+                                + "\"]}"))
+                .andReturn();
+        assertThat(bulk.getResponse().getStatus()).isEqualTo(200);
+        assertThat((Integer) JsonPath.read(bulk.getResponse().getContentAsString(), "$.updated_count"))
+                .isEqualTo(1);
+        assertThat((List<String>) JsonPath.read(bulk.getResponse().getContentAsString(), "$.not_found_ids"))
+                .containsExactlyInAnyOrder(bobItem1.toString(), bobItem2.toString());
+
+        // Bob's items are untouched (still unread, no read_at); Alice's item is read
+        assertThat(jdbc.queryForList(
+                        "SELECT notification_id FROM pnh_notification_read_states WHERE user_id = ? AND NOT is_read"
+                                + " AND read_at IS NULL",
+                        UUID.class,
+                        bob))
+                .containsExactlyInAnyOrder(bobItem1, bobItem2);
+        assertThat((Integer) JsonPath.read(list(c, bob, "").getResponse().getContentAsString(), "$.unread_count"))
+                .isEqualTo(2);
+        assertThat((Integer) JsonPath.read(list(c, alice, "").getResponse().getContentAsString(), "$.unread_count"))
+                .isEqualTo(0);
+    }
+
     @Test
     void onlyPushStandardListedNewestFirstWithReadState() throws Exception {
         ClientCreds c = data.client("SEND,USER_DELEGATE");

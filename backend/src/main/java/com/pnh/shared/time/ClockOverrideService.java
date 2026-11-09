@@ -201,9 +201,7 @@ public class ClockOverrideService {
     private static Map<String, Object> snapshot(ClockState s) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("mode", s.mode().name());
-        m.put(
-                "fixed_instant",
-                s.fixedInstant() == null ? null : s.fixedInstant().toString());
+        m.put("fixed_instant", s.fixedInstant() == null ? null : s.fixedInstant().toString());
         m.put("offset", s.offset());
         return m;
     }

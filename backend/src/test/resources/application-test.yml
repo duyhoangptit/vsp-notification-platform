@@ -30,3 +30,9 @@ logging:
     root: WARN
     com.pnh: INFO
     org.springframework.modulith: WARN
+# /v3/api-docs is generated from the controllers so ApiContractDriftIT can compare it with the contracts
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: false
