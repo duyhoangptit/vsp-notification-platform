@@ -31,7 +31,7 @@ interface Filters {
   to: string | null;
 }
 
-function fromParams(p: URLSearchParams): Filters {
+function fromParams(p: URLSearchParams, defaultFrom: string): Filters {
   return {
     client_request_id: p.get('client_request_id') ?? '',
     user_id: p.get('user_id') ?? '',
@@ -39,7 +39,7 @@ function fromParams(p: URLSearchParams): Filters {
     channel_type: p.get('channel_type'),
     status: p.get('status'),
     client_id: p.get('client_id') ?? '',
-    from: p.get('from') ?? dayjs().subtract(1, 'day').toISOString(),
+    from: p.get('from') ?? defaultFrom,
     to: p.get('to'),
   };
 }
@@ -49,7 +49,9 @@ export function NotificationSearchPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [page, setPage] = useState(1);
-  const applied = fromParams(params);
+  // Computed once per mount: a fresh `now - 1 day` on every render would change the queryKey and refetch forever.
+  const [defaultFrom] = useState(() => dayjs().subtract(1, 'day').toISOString());
+  const applied = fromParams(params, defaultFrom);
   const form = useForm<Filters>({ initialValues: applied });
 
   const query = {
