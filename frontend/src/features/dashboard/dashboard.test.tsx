@@ -14,12 +14,28 @@ describe('Dashboard', () => {
       clockHandler('SYSTEM'),
       http.get(API('/console/api/dashboard/volume'), ({ request }) => {
         volumeQueries.push(new URL(request.url).searchParams);
-        return HttpResponse.json({ buckets: [{ bucket_start: '2026-11-03T00:00:00Z', counts: { EMAIL: 8, SMS: 4 } }] });
+        return HttpResponse.json({
+          buckets: [{ bucket_start: '2026-11-03T00:00:00Z', counts: { EMAIL: 8, SMS: 4 } }],
+        });
       }),
       http.get(API('/console/api/dashboard/channel-rates'), () =>
         HttpResponse.json([
-          { channel_type: 'EMAIL', success_count: 6, failure_count: 2, in_progress_count: 0, success_rate: 0.75, failure_rate: 0.25 },
-          { channel_type: 'SMS', success_count: 3, failure_count: 1, in_progress_count: 4, success_rate: 0.75, failure_rate: 0.25 },
+          {
+            channel_type: 'EMAIL',
+            success_count: 6,
+            failure_count: 2,
+            in_progress_count: 0,
+            success_rate: 0.75,
+            failure_rate: 0.25,
+          },
+          {
+            channel_type: 'SMS',
+            success_count: 3,
+            failure_count: 1,
+            in_progress_count: 4,
+            success_rate: 0.75,
+            failure_rate: 0.25,
+          },
         ]),
       ),
     );

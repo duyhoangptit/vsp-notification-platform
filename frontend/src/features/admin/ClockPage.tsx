@@ -45,7 +45,11 @@ export function ClockPage() {
         <Text size="sm">Application now: {formatDateTime(clock?.now)}</Text>
         <Text size="sm">Real now: {formatDateTime(clock?.real_now)}</Text>
       </Card>
-      <SegmentedControl value={mode} onChange={(v) => setMode(v as 'FIXED' | 'OFFSET')} data={['FIXED', 'OFFSET']} />
+      <SegmentedControl
+        value={mode}
+        onChange={(v) => setMode(v as 'FIXED' | 'OFFSET')}
+        data={['FIXED', 'OFFSET']}
+      />
       {mode === 'FIXED' ? (
         <DateTimePicker label="Fixed instant" value={fixed} onChange={setFixed} withSeconds />
       ) : (

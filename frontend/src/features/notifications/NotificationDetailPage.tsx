@@ -1,4 +1,18 @@
-import { Anchor, Badge, Card, Code, Collapse, Grid, Group, Loader, Stack, Text, Timeline, Title, UnstyledButton } from '@mantine/core';
+import {
+  Anchor,
+  Badge,
+  Card,
+  Code,
+  Collapse,
+  Grid,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Timeline,
+  Title,
+  UnstyledButton,
+} from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -39,14 +53,19 @@ function ProviderResponse({ value }: { value: Record<string, unknown> }) {
 function label(e: TimelineEntry): string {
   if (e.event_type === 'STATUS_CHANGED') return `${e.from_status ?? '∅'} → ${e.to_status}`;
   if (e.event_type === 'ATTEMPT_FAILED') return `Attempt ${e.attempt} failed`;
-  if (e.event_type === 'CALLBACK_RECEIVED' && e.to_status) return `Provider report: ${e.from_status} → ${e.to_status}`;
+  if (e.event_type === 'CALLBACK_RECEIVED' && e.to_status)
+    return `Provider report: ${e.from_status} → ${e.to_status}`;
   return (e.event_type ?? '').replaceAll('_', ' ').toLowerCase();
 }
 
 /** Notification detail with content (OTP masked) and full status timeline (T144, FR-014). */
 export function NotificationDetailPage() {
   const { id } = useParams();
-  const { data: n, error, isLoading } = useQuery({
+  const {
+    data: n,
+    error,
+    isLoading,
+  } = useQuery({
     queryKey: ['notification', id],
     queryFn: () => unwrap(api.GET('/console/api/notifications/{id}', { params: { path: { id: id! } } })),
   });
@@ -74,11 +93,17 @@ export function NotificationDetailPage() {
           <Field label="Channel" value={n.channel_type} />
           <Field label="Category" value={n.category} />
           <Field label="Mode" value={n.content_mode} />
-          <Field label="Template" value={n.template_code ? `${n.template_code} (v${n.template_version})` : null} />
+          <Field
+            label="Template"
+            value={n.template_code ? `${n.template_code} (v${n.template_version})` : null}
+          />
           <Field label="Expires at" value={n.expires_at ? formatDateTime(n.expires_at) : null} />
           <Field label="Retries" value={n.retry_count} />
           <Field label="Opt-out overridden" value={n.opt_out_overridden ? 'yes' : 'no'} />
-          <Field label="Error" value={n.error_code ? `${n.error_code}${n.error_message ? ': ' + n.error_message : ''}` : null} />
+          <Field
+            label="Error"
+            value={n.error_code ? `${n.error_code}${n.error_message ? ': ' + n.error_message : ''}` : null}
+          />
         </Grid>
       </Card>
       <Card withBorder>
@@ -108,7 +133,9 @@ export function NotificationDetailPage() {
                 {e.error_message ? `: ${e.error_message}` : ''}
               </Text>
             )}
-            {e.provider_response && <ProviderResponse value={e.provider_response as Record<string, unknown>} />}
+            {e.provider_response && (
+              <ProviderResponse value={e.provider_response as Record<string, unknown>} />
+            )}
           </Timeline.Item>
         ))}
       </Timeline>

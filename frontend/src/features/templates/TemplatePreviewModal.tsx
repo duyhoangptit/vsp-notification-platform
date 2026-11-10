@@ -14,7 +14,15 @@ interface Props {
 }
 
 /** Renders the unsaved template with sample values (FR-022). */
-export function TemplatePreviewModal({ opened, onClose, channelType, subject, title, body, variables }: Props) {
+export function TemplatePreviewModal({
+  opened,
+  onClose,
+  channelType,
+  subject,
+  title,
+  body,
+  variables,
+}: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const preview = usePreview();
   const { reset } = preview;
@@ -23,7 +31,13 @@ export function TemplatePreviewModal({ opened, onClose, channelType, subject, ti
   }, [opened, reset]);
 
   const run = () =>
-    preview.mutate({ channel_type: channelType, subject_template: subject, title_template: title, body_template: body, variables: values });
+    preview.mutate({
+      channel_type: channelType,
+      subject_template: subject,
+      title_template: title,
+      body_template: body,
+      variables: values,
+    });
 
   return (
     <Modal opened={opened} onClose={onClose} title="Preview" size="lg">

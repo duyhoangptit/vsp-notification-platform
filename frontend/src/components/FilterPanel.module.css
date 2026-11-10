@@ -1,0 +1,5 @@
+@media (min-width: $mantine-breakpoint-md) {
+  .span2 {
+    grid-column: span 2;
+  }
+}

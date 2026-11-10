@@ -36,7 +36,14 @@ describe('auth and role navigation', () => {
     server.use(meHandler('ADMIN'), clockHandler('SYSTEM'));
     renderApp('/dashboard');
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' });
-    for (const label of ['Dashboard', 'Templates', 'Delivery Audit', 'Channel configs', 'Config change log', 'Alerts']) {
+    for (const label of [
+      'Dashboard',
+      'Templates',
+      'Delivery Audit',
+      'Channel configs',
+      'Config change log',
+      'Alerts',
+    ]) {
       expect(within(nav).getByText(label)).toBeInTheDocument();
     }
   });

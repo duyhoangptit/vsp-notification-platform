@@ -71,8 +71,10 @@ export function TemplateEditorPage() {
     validate: {
       template_code: (v) => (/^[A-Z0-9_]{3,100}$/.test(v) ? null : 'Use A-Z, 0-9 and _ (3-100)'),
       template_name: (v) => (v.trim() ? null : 'Name is required'),
-      subject_template: (v, values) => (values.channel_type === 'EMAIL' && !v.trim() ? 'Subject is required for EMAIL' : null),
-      title_template: (v, values) => (values.channel_type === 'PUSH' && !v.trim() ? 'Title is required for PUSH' : null),
+      subject_template: (v, values) =>
+        values.channel_type === 'EMAIL' && !v.trim() ? 'Subject is required for EMAIL' : null,
+      title_template: (v, values) =>
+        values.channel_type === 'PUSH' && !v.trim() ? 'Title is required for PUSH' : null,
       body_template: (v) => (v.trim() && v !== '<p></p>' ? null : 'Body is required'),
       external_template_ref: (v) => {
         if (!v.trim()) return null;
@@ -107,7 +109,9 @@ export function TemplateEditorPage() {
         subject_template: template.subject_template ?? '',
         title_template: template.title_template ?? '',
         body_template: template.body_template ?? '',
-        external_template_ref: template.external_template_ref ? JSON.stringify(template.external_template_ref, null, 2) : '',
+        external_template_ref: template.external_template_ref
+          ? JSON.stringify(template.external_template_ref, null, 2)
+          : '',
       };
       form.setValues(values);
       form.resetDirty(values);
@@ -148,7 +152,9 @@ export function TemplateEditorPage() {
       subject_template: isEmail ? values.subject_template : undefined,
       title_template: values.channel_type === 'PUSH' ? values.title_template : undefined,
       body_template: values.body_template,
-      external_template_ref: values.external_template_ref.trim() ? JSON.parse(values.external_template_ref) : null,
+      external_template_ref: values.external_template_ref.trim()
+        ? JSON.parse(values.external_template_ref)
+        : null,
       version: loadedVersion.current,
     };
     save.mutate(input, {
@@ -166,17 +172,27 @@ export function TemplateEditorPage() {
       <Stack maw={900}>
         <Group justify="space-between">
           <Title order={3}>{isNew ? 'New template' : `Template ${code}`}</Title>
-          {template && <Badge color={template.status === 'ACTIVE' ? 'green' : 'gray'}>{template.status}</Badge>}
+          {template && (
+            <Badge color={template.status === 'ACTIVE' ? 'green' : 'gray'}>{template.status}</Badge>
+          )}
         </Group>
         <Group grow>
           <TextInput label="Code" disabled={!isNew} {...form.getInputProps('template_code')} />
           <TextInput label="Name" {...form.getInputProps('template_name')} />
         </Group>
         <Group grow>
-          <Select label="Channel" data={['EMAIL', 'SMS', 'PUSH']} disabled={!isNew} {...form.getInputProps('channel_type')} />
+          <Select
+            label="Channel"
+            data={['EMAIL', 'SMS', 'PUSH']}
+            disabled={!isNew}
+            {...form.getInputProps('channel_type')}
+          />
           <Select label="Category" data={['STANDARD', 'OTP']} {...form.getInputProps('category')} />
         </Group>
-        <Checkbox label="Critical (bypasses user opt-out)" {...form.getInputProps('is_critical', { type: 'checkbox' })} />
+        <Checkbox
+          label="Critical (bypasses user opt-out)"
+          {...form.getInputProps('is_critical', { type: 'checkbox' })}
+        />
         {v.category === 'OTP' && (
           <Group grow>
             <TextInput label="OTP variable" {...form.getInputProps('otp_variable')} />
@@ -279,7 +295,9 @@ export function TemplateEditorPage() {
             <Button
               variant="subtle"
               color={template.status === 'ACTIVE' ? 'red' : 'green'}
-              onClick={() => setActive.mutate({ active: template.status !== 'ACTIVE', version: template.version ?? 0 })}
+              onClick={() =>
+                setActive.mutate({ active: template.status !== 'ACTIVE', version: template.version ?? 0 })
+              }
             >
               {template.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
             </Button>

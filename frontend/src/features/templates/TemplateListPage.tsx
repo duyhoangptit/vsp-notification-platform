@@ -1,8 +1,11 @@
-import { Badge, Button, Group, Select, Stack, TextInput, Title } from '@mantine/core';
+import { Badge, Button, Select, Stack, TextInput } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
+import { IconPlus, IconSearch } from '@tabler/icons-react';
 import { DataTable } from 'mantine-datatable';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { FilterPanel, FilterSpan2 } from '../../components/FilterPanel';
+import { PageHeader } from '../../components/PageHeader';
 import { ProblemAlert } from '../../components/ProblemAlert';
 import { formatDateTime } from '../../utils/format';
 import { useTemplates } from './api';
@@ -25,24 +28,42 @@ export function TemplateListPage() {
     size: PAGE_SIZE,
   });
 
+  const activeCount = [q.trim(), channel, status].filter(Boolean).length;
+  const reset = () => {
+    setQ('');
+    setChannel(null);
+    setStatus(null);
+    setPage(1);
+  };
+
   return (
     <Stack>
-      <Group justify="space-between">
-        <Title order={3}>Templates</Title>
-        <Button onClick={() => navigate('/templates/new')}>New template</Button>
-      </Group>
-      <Group>
-        <TextInput
-          label="Search"
-          placeholder="Code or name"
-          value={q}
-          onChange={(e) => {
-            setQ(e.currentTarget.value);
-            setPage(1);
-          }}
-        />
+      <PageHeader
+        title="Templates"
+        description="Message templates per channel. Click a row to edit it."
+        total={data?.total}
+        actions={
+          <Button leftSection={<IconPlus size={16} aria-hidden />} onClick={() => navigate('/templates/new')}>
+            New template
+          </Button>
+        }
+      />
+      <FilterPanel activeCount={activeCount} onReset={reset}>
+        <FilterSpan2>
+          <TextInput
+            label="Search"
+            placeholder="Code or name"
+            leftSection={<IconSearch size={16} aria-hidden />}
+            value={q}
+            onChange={(e) => {
+              setQ(e.currentTarget.value);
+              setPage(1);
+            }}
+          />
+        </FilterSpan2>
         <Select
           label="Channel"
+          placeholder="All channels"
           data={['EMAIL', 'SMS', 'PUSH']}
           value={channel}
           onChange={(v) => {
@@ -53,6 +74,7 @@ export function TemplateListPage() {
         />
         <Select
           label="Status"
+          placeholder="All statuses"
           data={['ACTIVE', 'INACTIVE']}
           value={status}
           onChange={(v) => {
@@ -61,7 +83,7 @@ export function TemplateListPage() {
           }}
           clearable
         />
-      </Group>
+      </FilterPanel>
       <ProblemAlert error={error} />
       <DataTable
         withTableBorder

@@ -12,9 +12,10 @@ export interface TemplateFilters {
   size: number;
 }
 
-export function useTemplates(filters: TemplateFilters) {
+export function useTemplates(filters: TemplateFilters, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['templates', filters],
+    enabled: options.enabled ?? true,
     queryFn: () =>
       unwrap(
         api.GET('/console/api/templates', {
@@ -66,9 +67,13 @@ export function useSetTemplateActive(code: string) {
     mutationFn: ({ active, version }: { active: boolean; version: number }) =>
       active
         ? unwrap(
-            api.POST('/console/api/templates/{code}/activate', { params: { path: { code }, query: { version } } }),
+            api.POST('/console/api/templates/{code}/activate', {
+              params: { path: { code }, query: { version } },
+            }),
           )
-        : unwrap(api.DELETE('/console/api/templates/{code}', { params: { path: { code }, query: { version } } })),
+        : unwrap(
+            api.DELETE('/console/api/templates/{code}', { params: { path: { code }, query: { version } } }),
+          ),
     onSuccess: (saved) => {
       qc.invalidateQueries({ queryKey: ['templates'] });
       qc.setQueryData(['template', code], saved);

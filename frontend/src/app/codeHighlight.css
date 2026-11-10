@@ -1,0 +1,14 @@
+/* JSON token colours for @mantine/code-highlight (highlight.js adapter), both color schemes. */
+.hljs-attr {
+  color: light-dark(var(--mantine-color-dispatch-8), var(--mantine-color-dispatch-3));
+}
+.hljs-string {
+  color: light-dark(var(--mantine-color-teal-8), var(--mantine-color-teal-3));
+}
+.hljs-number,
+.hljs-literal {
+  color: light-dark(var(--mantine-color-orange-8), var(--mantine-color-orange-3));
+}
+.hljs-punctuation {
+  color: var(--mantine-color-dimmed);
+}

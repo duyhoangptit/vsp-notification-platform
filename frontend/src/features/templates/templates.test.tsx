@@ -92,7 +92,13 @@ describe('templates screens', () => {
       http.get(API('/console/api/templates/OTP_SMS'), () => HttpResponse.json(smsTemplate)),
       http.put(API('/console/api/templates/OTP_SMS'), () =>
         HttpResponse.json(
-          { type: 'x', title: 'Conflict', status: 409, code: 'VERSION_CONFLICT', current: { ...smsTemplate, version: 4 } },
+          {
+            type: 'x',
+            title: 'Conflict',
+            status: 409,
+            code: 'VERSION_CONFLICT',
+            current: { ...smsTemplate, version: 4 },
+          },
           { status: 409 },
         ),
       ),

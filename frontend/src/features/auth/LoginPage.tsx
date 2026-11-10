@@ -32,7 +32,11 @@ export function LoginPage() {
           <Stack>
             <Title order={3}>PNH Console</Title>
             <TextInput label="Username" autoComplete="username" {...form.getInputProps('username')} />
-            <PasswordInput label="Password" autoComplete="current-password" {...form.getInputProps('password')} />
+            <PasswordInput
+              label="Password"
+              autoComplete="current-password"
+              {...form.getInputProps('password')}
+            />
             <ProblemAlert error={login.error} />
             <Button type="submit" loading={login.isPending}>
               Sign in

@@ -26,12 +26,20 @@ export function DashboardPage() {
   const volume = useQuery({
     queryKey: ['dashboard-volume', from, to, granularity],
     enabled,
-    queryFn: () => unwrap(api.GET('/console/api/dashboard/volume', { params: { query: { from: from!, to: to!, granularity } } })),
+    queryFn: () =>
+      unwrap(
+        api.GET('/console/api/dashboard/volume', {
+          params: { query: { from: from!, to: to!, granularity } },
+        }),
+      ),
   });
   const rates = useQuery({
     queryKey: ['dashboard-rates', from, to],
     enabled,
-    queryFn: () => unwrap(api.GET('/console/api/dashboard/channel-rates', { params: { query: { from: from!, to: to! } } })),
+    queryFn: () =>
+      unwrap(
+        api.GET('/console/api/dashboard/channel-rates', { params: { query: { from: from!, to: to! } } }),
+      ),
   });
 
   const channels = Array.from(
@@ -50,7 +58,14 @@ export function DashboardPage() {
       <Group justify="space-between" align="flex-end">
         <Title order={3}>Dashboard</Title>
         <Group align="flex-end">
-          <DatePickerInput type="range" label="Period" value={range} onChange={setRange} maxDate={new Date()} w={260} />
+          <DatePickerInput
+            type="range"
+            label="Period"
+            value={range}
+            onChange={setRange}
+            maxDate={new Date()}
+            w={260}
+          />
           <SegmentedControl
             aria-label="Granularity"
             value={granularity}

@@ -2,24 +2,36 @@ import {
   ActionIcon,
   Badge,
   Button,
+  Divider,
   Group,
   NumberInput,
+  Paper,
+  SimpleGrid,
   Stack,
   Switch,
   Table,
   Tabs,
   Text,
   TextInput,
-  Title,
   Tooltip,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { IconTrash } from '@tabler/icons-react';
+import {
+  IconAdjustments,
+  IconAt,
+  IconHistory,
+  IconPlus,
+  IconSend,
+  IconTrash,
+  IconUser,
+  IconUsers,
+} from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable } from 'mantine-datatable';
 import { useState } from 'react';
 import { api, unwrap, type Schemas } from '../../api/client';
+import { PageHeader } from '../../components/PageHeader';
 import { ProblemAlert } from '../../components/ProblemAlert';
 import { formatDateTime } from '../../utils/format';
 
@@ -34,12 +46,18 @@ function Recipients() {
   });
   const form = useForm({
     initialValues: { email: '', display_name: '' },
-    validate: { email: (v) => (EMAIL.test(v.trim()) && v.length <= 254 ? null : 'Enter a valid email address') },
+    validate: {
+      email: (v) => (EMAIL.test(v.trim()) && v.length <= 254 ? null : 'Enter a valid email address'),
+    },
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['alert-recipients'] });
   const add = useMutation({
     mutationFn: (v: { email: string; display_name: string }) =>
-      unwrap(api.POST('/console/api/alerts/recipients', { body: { email: v.email.trim(), display_name: v.display_name || undefined } })),
+      unwrap(
+        api.POST('/console/api/alerts/recipients', {
+          body: { email: v.email.trim(), display_name: v.display_name || undefined },
+        }),
+      ),
     onSuccess: () => {
       form.reset();
       refresh();
@@ -57,7 +75,11 @@ function Recipients() {
   });
   const remove = useMutation({
     mutationFn: (r: { id: number; version: number }) =>
-      unwrap(api.DELETE('/console/api/alerts/recipients/{id}', { params: { path: { id: r.id }, query: { version: r.version } } })),
+      unwrap(
+        api.DELETE('/console/api/alerts/recipients/{id}', {
+          params: { path: { id: r.id }, query: { version: r.version } },
+        }),
+      ),
     onSettled: refresh,
   });
   const test = useMutation({
@@ -71,18 +93,51 @@ function Recipients() {
 
   return (
     <Stack>
-      <form onSubmit={form.onSubmit((v) => add.mutate(v))}>
-        <Group align="flex-end">
-          <TextInput label="Email" {...form.getInputProps('email')} />
-          <TextInput label="Display name" {...form.getInputProps('display_name')} />
-          <Button type="submit" loading={add.isPending}>
-            Add recipient
-          </Button>
-          <Button variant="default" onClick={() => test.mutate()} loading={test.isPending}>
-            Send test alert
-          </Button>
-        </Group>
-      </form>
+      <Paper
+        withBorder
+        radius="md"
+        p="md"
+        component="form"
+        aria-label="Add recipient"
+        onSubmit={form.onSubmit((v) => add.mutate(v))}
+      >
+        <Stack gap="sm">
+          <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="sm">
+            <TextInput
+              label="Email"
+              inputMode="email"
+              placeholder="ops@example.com"
+              leftSection={<IconAt size={16} aria-hidden />}
+              {...form.getInputProps('email')}
+            />
+            <TextInput
+              label="Display name"
+              placeholder="Optional"
+              leftSection={<IconUser size={16} aria-hidden />}
+              {...form.getInputProps('display_name')}
+            />
+          </SimpleGrid>
+          <Divider />
+          <Group justify="space-between" gap="sm">
+            <Text size="xs" c="dimmed">
+              Alerts are emailed to every active recipient.
+            </Text>
+            <Group gap="xs">
+              <Button
+                variant="default"
+                leftSection={<IconSend size={16} aria-hidden />}
+                onClick={() => test.mutate()}
+                loading={test.isPending}
+              >
+                Send test alert
+              </Button>
+              <Button type="submit" leftSection={<IconPlus size={16} aria-hidden />} loading={add.isPending}>
+                Add recipient
+              </Button>
+            </Group>
+          </Group>
+        </Stack>
+      </Paper>
       <ProblemAlert error={error ?? add.error ?? toggle.error ?? remove.error} />
       <Table striped withTableBorder>
         <Table.Thead>
@@ -103,7 +158,9 @@ function Recipients() {
                 <Switch
                   aria-label={`Active ${r.email}`}
                   checked={!!r.is_active}
-                  onChange={(e) => toggle.mutate({ id: r.id!, is_active: e.currentTarget.checked, version: r.version ?? 0 })}
+                  onChange={(e) =>
+                    toggle.mutate({ id: r.id!, is_active: e.currentTarget.checked, version: r.version ?? 0 })
+                  }
                 />
               </Table.Td>
               <Table.Td>
@@ -169,26 +226,57 @@ function RuleRow({ rule }: { rule: Rule }) {
         <Text size="xs" c="dimmed">
           {rule.description}
         </Text>
-        <ProblemAlert error={save.error} onReload={() => qc.invalidateQueries({ queryKey: ['alert-rules'] })} />
+        <ProblemAlert
+          error={save.error}
+          onReload={() => qc.invalidateQueries({ queryKey: ['alert-rules'] })}
+        />
       </Table.Td>
       <Table.Td>
-        <Switch aria-label={`Enabled ${rule.rule_code}`} {...form.getInputProps('enabled', { type: 'checkbox' })} />
+        <Switch
+          aria-label={`Enabled ${rule.rule_code}`}
+          {...form.getInputProps('enabled', { type: 'checkbox' })}
+        />
       </Table.Td>
       <Table.Td>
-        <NumberInput aria-label={`Threshold ${rule.rule_code}`} rightSection={unit} min={0} w={110} {...form.getInputProps('threshold')} />
+        <NumberInput
+          aria-label={`Threshold ${rule.rule_code}`}
+          rightSection={unit}
+          min={0}
+          w={110}
+          {...form.getInputProps('threshold')}
+        />
       </Table.Td>
       <Table.Td>
-        <NumberInput aria-label={`Window ${rule.rule_code}`} clampBehavior="none" min={1} max={1440} w={100} {...form.getInputProps('window_minutes')} />
+        <NumberInput
+          aria-label={`Window ${rule.rule_code}`}
+          clampBehavior="none"
+          min={1}
+          max={1440}
+          w={100}
+          {...form.getInputProps('window_minutes')}
+        />
       </Table.Td>
       <Table.Td>
         {rule.rule_code === 'CHANNEL_FAILURE_RATE' ? (
-          <NumberInput aria-label={`Min sample ${rule.rule_code}`} min={1} w={100} {...form.getInputProps('min_sample')} />
+          <NumberInput
+            aria-label={`Min sample ${rule.rule_code}`}
+            min={1}
+            w={100}
+            {...form.getInputProps('min_sample')}
+          />
         ) : (
           '—'
         )}
       </Table.Td>
       <Table.Td>
-        <NumberInput aria-label={`Cooldown ${rule.rule_code}`} clampBehavior="none" min={5} max={1440} w={100} {...form.getInputProps('cooldown_minutes')} />
+        <NumberInput
+          aria-label={`Cooldown ${rule.rule_code}`}
+          clampBehavior="none"
+          min={5}
+          max={1440}
+          w={100}
+          {...form.getInputProps('cooldown_minutes')}
+        />
       </Table.Td>
       <Table.Td>
         <Button size="xs" onClick={() => form.onSubmit((v) => save.mutate(v))()} loading={save.isPending}>
@@ -200,7 +288,10 @@ function RuleRow({ rule }: { rule: Rule }) {
 }
 
 function Rules() {
-  const { data, error } = useQuery({ queryKey: ['alert-rules'], queryFn: () => unwrap(api.GET('/console/api/alerts/rules')) });
+  const { data, error } = useQuery({
+    queryKey: ['alert-rules'],
+    queryFn: () => unwrap(api.GET('/console/api/alerts/rules')),
+  });
   return (
     <Stack>
       <ProblemAlert error={error} />
@@ -230,7 +321,8 @@ function History() {
   const [page, setPage] = useState(1);
   const { data, isFetching, error } = useQuery({
     queryKey: ['alert-events', page],
-    queryFn: () => unwrap(api.GET('/console/api/alerts/events', { params: { query: { page: page - 1, size: 20 } } })),
+    queryFn: () =>
+      unwrap(api.GET('/console/api/alerts/events', { params: { query: { page: page - 1, size: 20 } } })),
   });
   return (
     <Stack>
@@ -250,13 +342,18 @@ function History() {
           { accessor: 'occurred_at', title: 'When', render: (e) => formatDateTime(e.occurred_at) },
           { accessor: 'rule_code', title: 'Rule' },
           { accessor: 'channel_type', title: 'Channel', render: (e) => e.channel_type ?? 'ALL' },
-          { accessor: 'kind', render: (e) => <Badge color={e.kind === 'FIRED' ? 'red' : 'green'}>{e.kind}</Badge> },
+          {
+            accessor: 'kind',
+            render: (e) => <Badge color={e.kind === 'FIRED' ? 'red' : 'green'}>{e.kind}</Badge>,
+          },
           { accessor: 'measured_value', title: 'Value' },
           { accessor: 'threshold' },
           {
             accessor: 'send_status',
             title: 'Email',
-            render: (e) => <Badge color={e.send_status === 'SENT' ? 'teal' : 'orange'}>{e.send_status}</Badge>,
+            render: (e) => (
+              <Badge color={e.send_status === 'SENT' ? 'teal' : 'orange'}>{e.send_status}</Badge>
+            ),
           },
           { accessor: 'recipients', render: (e) => (e.recipients ?? []).length },
         ]}
@@ -269,12 +366,21 @@ function History() {
 export function AlertsPage() {
   return (
     <Stack>
-      <Title order={3}>Alerts</Title>
+      <PageHeader
+        title="Alerts"
+        description="Incident emails when delivery health degrades: who receives them, when they fire, and what was sent."
+      />
       <Tabs defaultValue="recipients" keepMounted={false}>
         <Tabs.List>
-          <Tabs.Tab value="recipients">Recipients</Tabs.Tab>
-          <Tabs.Tab value="rules">Rules</Tabs.Tab>
-          <Tabs.Tab value="history">History</Tabs.Tab>
+          <Tabs.Tab value="recipients" leftSection={<IconUsers size={16} aria-hidden />}>
+            Recipients
+          </Tabs.Tab>
+          <Tabs.Tab value="rules" leftSection={<IconAdjustments size={16} aria-hidden />}>
+            Rules
+          </Tabs.Tab>
+          <Tabs.Tab value="history" leftSection={<IconHistory size={16} aria-hidden />}>
+            History
+          </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="recipients" pt="md">
           <Recipients />

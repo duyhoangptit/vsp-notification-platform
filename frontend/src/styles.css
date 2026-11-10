@@ -1,6 +1,6 @@
 .pnh-placeholder {
-  background: var(--mantine-color-indigo-1);
-  color: var(--mantine-color-indigo-9);
+  background: light-dark(var(--mantine-color-dispatch-1), rgb(from var(--mantine-color-dispatch-5) r g b / 0.2));
+  color: light-dark(var(--mantine-color-dispatch-9), var(--mantine-color-dispatch-2));
   border-radius: 3px;
   padding: 0 2px;
   font-family: var(--mantine-font-family-monospace);
