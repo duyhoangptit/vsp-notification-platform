@@ -1,4 +1,5 @@
-import { Alert, Button, Group, List, Text } from '@mantine/core';
+import { ActionIcon, Alert, Button, CopyButton, Group, List, Text, Tooltip } from '@mantine/core';
+import { IconCheck, IconCopy } from '@tabler/icons-react';
 import { ApiError } from '../api/client';
 
 interface Props {
@@ -6,7 +7,30 @@ interface Props {
   onReload?: () => void;
 }
 
-/** Renders an RFC 9457 problem: code, detail and field errors; VERSION_CONFLICT offers a reload. */
+/** Trace id with a copy button, so an operator can quote it when reporting the error. */
+function TraceId({ value }: { value: string }) {
+  return (
+    <Group gap={4} mt="xs" wrap="nowrap">
+      <Text size="xs" c="dimmed">
+        Trace ID:
+      </Text>
+      <Text size="xs" c="dimmed" ff="monospace" style={{ wordBreak: 'break-all' }}>
+        {value}
+      </Text>
+      <CopyButton value={value}>
+        {({ copied, copy }) => (
+          <Tooltip label={copied ? 'Copied' : 'Copy trace ID'} withArrow>
+            <ActionIcon size="xs" variant="subtle" color="gray" onClick={copy} aria-label="Copy trace ID">
+              {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </CopyButton>
+    </Group>
+  );
+}
+
+/** Renders an RFC 9457 problem: code, detail, field errors and trace id; VERSION_CONFLICT offers a reload. */
 export function ProblemAlert({ error, onReload }: Props) {
   if (!error) return null;
   if (error instanceof ApiError) {
@@ -45,6 +69,7 @@ export function ProblemAlert({ error, onReload }: Props) {
         {problem.missing_variables && problem.missing_variables.length > 0 && (
           <Text size="sm">Missing variables: {problem.missing_variables.join(', ')}</Text>
         )}
+        {error.traceId && <TraceId value={error.traceId} />}
       </Alert>
     );
   }

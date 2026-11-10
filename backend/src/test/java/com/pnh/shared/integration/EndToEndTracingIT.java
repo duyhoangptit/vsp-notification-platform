@@ -94,6 +94,38 @@ class EndToEndTracingIT extends StubbedProvidersTestBase {
         }
     }
 
+    /** The id handed to the caller is the real HTTP span's trace id, and the access log line carries it in MDC. */
+    @Test
+    void traceIdIsReturnedToTheCaller() throws Exception {
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        Logger access = (Logger) LoggerFactory.getLogger("pnh.access");
+        access.addAppender(logs);
+        try {
+            org.springframework.mock.web.MockHttpServletResponse res = mvc.perform(
+                            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                            "/api/v1/notifications/send")
+                                    .contentType("application/json")
+                                    .content("{}"))
+                    .andReturn()
+                    .getResponse();
+
+            assertThat(res.getStatus()).isEqualTo(401); // rejected by Spring Security, before any controller
+            String traceId = res.getHeader("X-Trace-Id");
+            assertThat(traceId).matches("[0-9a-f]{32}");
+            assertThat(res.getContentAsString()).contains("\"trace_id\":\"" + traceId + "\"");
+            // batch span processor exports every ~5 s
+            await().atMost(Duration.ofSeconds(15))
+                    .until(() -> spans.getFinishedSpanItems().stream()
+                            .anyMatch(s -> s.getTraceId().equals(traceId)
+                                    && s.getParentSpanContext().getSpanId().equals("0000000000000000")));
+            assertThat(logs.list)
+                    .anySatisfy(e -> assertThat(e.getMDCPropertyMap()).containsEntry("traceId", traceId));
+        } finally {
+            access.detachAppender(logs);
+        }
+    }
+
     private List<SpanData> spansOf(UUID id) {
         return spans.getFinishedSpanItems().stream()
                 .filter(s -> id.toString()

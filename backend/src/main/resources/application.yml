@@ -62,6 +62,10 @@ spring:
   session:
     jdbc:
       initialize-schema: never   # tables come from Flyway V6
+  web:
+    error:
+      include-stacktrace: never
+      include-message: never
 
 server:
   port: 8080
@@ -71,9 +75,6 @@ server:
         name: PNH_SESSION
         http-only: true
         same-site: lax
-  error:
-    include-stacktrace: never
-    include-message: never
 
 management:
   health:

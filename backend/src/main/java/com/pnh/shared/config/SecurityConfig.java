@@ -1,10 +1,14 @@
 package com.pnh.shared.config;
 
 import com.pnh.shared.domain.ErrorCode;
+import com.pnh.shared.logging.TraceIds;
 import com.pnh.shared.web.ProblemFactory;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,6 +36,8 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     @Bean
     @Order(1)
@@ -65,15 +71,20 @@ public class SecurityConfig {
                         .authenticated())
                 .httpBasic(b -> b.authenticationEntryPoint((req, res, ex) -> {
                     if (ex instanceof DisabledException) {
-                        write(res, ErrorCode.CLIENT_INACTIVE, 403, "Client is inactive");
+                        reject(req, res, ex, ErrorCode.CLIENT_INACTIVE, 403, "Client is inactive");
                     } else {
-                        write(res, ErrorCode.UNAUTHORIZED, 401, "Valid client credentials are required");
+                        reject(req, res, ex, ErrorCode.UNAUTHORIZED, 401, "Valid client credentials are required");
                     }
                 }))
-                .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) ->
-                                write(res, ErrorCode.UNAUTHORIZED, 401, "Valid client credentials are required"))
-                        .accessDeniedHandler((req, res, ex) ->
-                                write(res, ErrorCode.SCOPE_DENIED, 403, "Client scope does not allow this operation")))
+                .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> reject(
+                                req, res, ex, ErrorCode.UNAUTHORIZED, 401, "Valid client credentials are required"))
+                        .accessDeniedHandler((req, res, ex) -> reject(
+                                req,
+                                res,
+                                ex,
+                                ErrorCode.SCOPE_DENIED,
+                                403,
+                                "Client scope does not allow this operation")))
                 .csrf(c -> c.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(r -> r.disable())
@@ -94,9 +105,9 @@ public class SecurityConfig {
                         c.spa().csrfTokenRepository(csrfRepository).ignoringRequestMatchers("/console/api/auth/login"))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .exceptionHandling(e -> e.authenticationEntryPoint(
-                                (req, res, ex) -> write(res, ErrorCode.UNAUTHORIZED, 401, "Sign in required"))
-                        .accessDeniedHandler(
-                                (req, res, ex) -> write(res, ErrorCode.FORBIDDEN, 403, "Operation not allowed")))
+                                (req, res, ex) -> reject(req, res, ex, ErrorCode.UNAUTHORIZED, 401, "Sign in required"))
+                        .accessDeniedHandler((req, res, ex) ->
+                                reject(req, res, ex, ErrorCode.FORBIDDEN, 403, "Operation not allowed")))
                 .requestCache(r -> r.disable())
                 .formLogin(f -> f.disable())
                 .httpBasic(b -> b.disable())
@@ -121,10 +132,26 @@ public class SecurityConfig {
                 .build();
     }
 
-    static void write(HttpServletResponse res, ErrorCode code, int status, String detail) throws IOException {
+    /** Logs an authentication/authorization rejection (these never reach the MVC exception handler), then writes it. */
+    static void reject(
+            HttpServletRequest req, HttpServletResponse res, Exception ex, ErrorCode code, int status, String detail)
+            throws IOException {
+        log.warn(
+                "Request rejected {} [{}] on {} {}: {} <{}>",
+                status,
+                code,
+                req.getMethod(),
+                req.getRequestURI(),
+                ex.getMessage(),
+                ex.getClass().getSimpleName());
+        write(res, code, status, detail, TraceIds.of(req));
+    }
+
+    static void write(HttpServletResponse res, ErrorCode code, int status, String detail, String traceId)
+            throws IOException {
         res.setStatus(status);
         res.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         res.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        res.getWriter().write(ProblemFactory.toJson(code, status, detail));
+        res.getWriter().write(ProblemFactory.toJson(code, status, detail, traceId));
     }
 }

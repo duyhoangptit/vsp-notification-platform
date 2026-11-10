@@ -558,7 +558,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description Error (RFC 9457; `code` e.g. FORBIDDEN, VERSION_CONFLICT, TEMPLATE_CODE_EXISTS, INVALID_PLACEHOLDER, INVALID_FIELD; VERSION_CONFLICT includes `current`). */
+        /** @description Error (RFC 9457; carries `trace_id`; `code` e.g. FORBIDDEN, VERSION_CONFLICT, TEMPLATE_CODE_EXISTS, INVALID_PLACEHOLDER, INVALID_FIELD; VERSION_CONFLICT includes `current`). */
         Problem: {
             headers: {
                 [name: string]: unknown;
@@ -576,6 +576,11 @@ export interface components {
                     }[];
                     /** @description Latest representation on VERSION_CONFLICT */
                     current?: Record<string, never>;
+                    /**
+                     * @description Trace id of the failed request (also in the X-Trace-Id response header); quote it when reporting an error.
+                     * @example 09751c214f483f66a8cfe4be09d97ba9
+                     */
+                    trace_id?: string;
                 };
             };
         };

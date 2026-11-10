@@ -477,7 +477,7 @@ components:
       name: PNH_SESSION
   responses:
     Problem:
-      description: Error (RFC 9457; `code` e.g. FORBIDDEN, VERSION_CONFLICT, TEMPLATE_CODE_EXISTS, INVALID_PLACEHOLDER, INVALID_FIELD; VERSION_CONFLICT includes `current`).
+      description: Error (RFC 9457; carries `trace_id`; `code` e.g. FORBIDDEN, VERSION_CONFLICT, TEMPLATE_CODE_EXISTS, INVALID_PLACEHOLDER, INVALID_FIELD; VERSION_CONFLICT includes `current`).
       content:
         application/problem+json:
           schema:
@@ -490,6 +490,7 @@ components:
               detail: { type: string }
               errors: { type: array, items: { type: object, properties: { field: { type: string }, message: { type: string } } } }
               current: { type: object, description: Latest representation on VERSION_CONFLICT }
+              trace_id: { type: string, description: 'Trace id of the failed request (also in the X-Trace-Id response header); quote it when reporting an error.', example: 09751c214f483f66a8cfe4be09d97ba9 }
   schemas:
     Me:
       type: object

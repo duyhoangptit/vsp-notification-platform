@@ -355,3 +355,9 @@ components:
               field: { type: string }
               message: { type: string }
         missing_variables: { type: array, items: { type: string } }
+        trace_id:
+          type: string
+          description: |
+            Trace id of the failed request (32 hex chars); also returned on every response in the
+            `X-Trace-Id` header. Quote it when reporting an error so it can be found in logs and traces.
+          example: 09751c214f483f66a8cfe4be09d97ba9

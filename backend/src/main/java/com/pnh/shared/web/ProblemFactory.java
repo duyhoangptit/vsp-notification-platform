@@ -12,6 +12,7 @@ import org.springframework.http.ProblemDetail;
 public final class ProblemFactory {
 
     public static final String TYPE_BASE = "https://pnh.example.com/problems/";
+    public static final String TRACE_ID = "trace_id";
 
     private ProblemFactory() {}
 
@@ -60,12 +61,21 @@ public final class ProblemFactory {
         return m;
     }
 
+    /** Adds {@code trace_id} (see {@link com.pnh.shared.logging.TraceIds}) when the request has one. */
+    public static ProblemDetail withTraceId(ProblemDetail pd, String traceId) {
+        if (traceId != null) {
+            pd.setProperty(TRACE_ID, traceId);
+        }
+        return pd;
+    }
+
     /** Minimal JSON rendering for filters that run before the MVC message converters. */
-    public static String toJson(ErrorCode code, int status, String detail) {
+    public static String toJson(ErrorCode code, int status, String detail, String traceId) {
         return "{\"type\":\"" + TYPE_BASE + code.name().toLowerCase(Locale.ROOT).replace('_', '-') + "\",\"title\":\""
                 + code.title() + "\",\"status\":" + status + ",\"code\":\"" + code.name() + "\""
                 + (detail == null
                         ? ""
-                        : ",\"detail\":\"" + detail.replace("\\", "\\\\").replace("\"", "\\\"") + "\"") + "}";
+                        : ",\"detail\":\"" + detail.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+                + (traceId == null ? "" : ",\"" + TRACE_ID + "\":\"" + traceId + "\"") + "}";
     }
 }

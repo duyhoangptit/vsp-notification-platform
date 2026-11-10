@@ -11,16 +11,24 @@ export interface Problem {
   errors?: { field?: string; message?: string }[];
   current?: Record<string, unknown>;
   missing_variables?: string[];
+  /** Trace id of the failed request: quote it when reporting the error. */
+  trace_id?: string;
 }
+
+/** Response header carrying the trace id on every API response. */
+export const TRACE_ID_HEADER = 'X-Trace-Id';
 
 export class ApiError extends Error {
   readonly status: number;
   readonly problem: Problem;
+  /** From the problem body, else the {@link TRACE_ID_HEADER} header (e.g. non-JSON gateway errors). */
+  readonly traceId: string | undefined;
 
-  constructor(status: number, problem: Problem) {
+  constructor(status: number, problem: Problem, traceId?: string) {
     super(problem.detail ?? problem.title ?? `HTTP ${status}`);
     this.status = status;
     this.problem = problem;
+    this.traceId = problem.trace_id ?? traceId;
   }
 
   get code(): string | undefined {
@@ -62,8 +70,8 @@ export async function unwrap<T>(
 ): Promise<T> {
   const { data, error, response } = await promise;
   if (!response.ok) {
-    const problem = (error ?? {}) as Problem;
-    throw new ApiError(response.status, problem);
+    const problem = (error && typeof error === 'object' ? error : {}) as Problem;
+    throw new ApiError(response.status, problem, response.headers.get(TRACE_ID_HEADER) ?? undefined);
   }
   return data as T;
 }
