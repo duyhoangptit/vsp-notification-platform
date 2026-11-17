@@ -112,13 +112,29 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          # Fail early with a clear message if the secret is not a usable, passphrase-less private key
+          if ! pub=$(ssh-keygen -y -P '' -f ~/.ssh/id_deploy 2>&1); then
+            first=$(head -1 ~/.ssh/id_deploy | cut -c1-40)
+            echo "::error::VPS_SSH_KEY is not a valid private key without passphrase ($(wc -l < ~/.ssh/id_deploy) line(s), starts with '${first}'). Expected the full file incl. '-----BEGIN OPENSSH PRIVATE KEY-----' / '-----END ...-----' on separate lines. ssh-keygen: ${pub}"
+            exit 1
+          fi
+          echo "Deploy key (must be in ~/.ssh/authorized_keys of VPS_USER on the VPS):"
+          printf '%s\n' "$pub" | ssh-keygen -lf -
           if [[ -n "$KNOWN_HOSTS" ]]; then
             # Keep only the key type + key of each entry and pin them to VPS_HOST, so the secret works
             # whatever host form ssh-keyscan printed (IP vs domain, [host]:port, hashed |1|...).
-            printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' \
-              | awk -v h="$VPS_HOST" '!/^[[:space:]]*(#|$)/ && NF >= 3 { print h, $(NF-1), $NF }' > ~/.ssh/known_hosts
-            [[ -s ~/.ssh/known_hosts ]] || { echo "::error::VPS_KNOWN_HOSTS has no usable 'host keytype key' line"; exit 1; }
+            # Accepts known_hosts lines ("host type key"), .pub lines ("type key comment") or bare "type key".
+            printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' | awk -v h="$VPS_HOST" '
+              /^[[:space:]]*#/ { next }
+              { for (i = 1; i < NF; i++) if ($i ~ /^(ssh-(ed25519|rsa|dss)|ecdsa-sha2-nistp(256|384|521)|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)$/) { print h, $i, $(i+1); next } }
+            ' > ~/.ssh/known_hosts
+            if [[ ! -s ~/.ssh/known_hosts ]]; then
+              lines=$(printf '%s\n' "$KNOWN_HOSTS" | grep -c . || true)
+              comments=$(printf '%s\n' "$KNOWN_HOSTS" | grep -c '^[[:space:]]*#' || true)
+              echo "::error::VPS_KNOWN_HOSTS has no host key (ssh-ed25519/ecdsa-*/ssh-rsa) — $lines non-empty line(s), $comments comment line(s). Put the output of 'ssh-keyscan $VPS_HOST' (key lines, not only '#' lines) in the secret."
+              exit 1
+            fi
             echo "Trusted host keys (from VPS_KNOWN_HOSTS):"; ssh-keygen -lf ~/.ssh/known_hosts
             echo "Keys the server presents now (compare SHA256 values):"
             ssh-keyscan -p "$SSH_PORT" "$VPS_HOST" 2>/dev/null | ssh-keygen -lf - || echo "  (ssh-keyscan could not reach $VPS_HOST:$SSH_PORT)"
