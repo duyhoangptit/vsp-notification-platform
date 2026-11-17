@@ -16,7 +16,7 @@ on:
         default: ''
 
 concurrency:
-  group: deploy-production
+  group: deploy-vinspeed-uat
   cancel-in-progress: false
 
 permissions:
@@ -93,10 +93,10 @@ jobs:
     if: always() && needs.prepare.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
-      name: production
+      name: vinspeed-uat
       url: ${{ vars.APP_URL }}
     env:
-      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/pnh' }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || secrets.DEPLOY_DIR || '/opt/pnh' }}
       SSH_PORT: ${{ secrets.VPS_PORT || '22' }}
     steps:
       - uses: actions/checkout@v4

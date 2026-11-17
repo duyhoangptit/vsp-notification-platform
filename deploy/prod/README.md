@@ -93,7 +93,9 @@ WireMock của infra mount `vinspeed/wiremock/`; copy stub của dự án vào �
 
 ## 3. GitHub repo settings
 
-**Settings → Environments → `production`** (có thể bật *Required reviewers* để duyệt trước khi deploy):
+`NVD_API_KEY` (dùng cho job `dependency-scan` của `ci`) phải là **Repository secret** (Settings → Secrets and variables → Actions → *Repository secrets*), không đặt trong environment.
+
+**Settings → Environments → `vinspeed-uat`** (có thể bật *Required reviewers* để duyệt trước khi deploy):
 
 | Loại     | Tên                | Giá trị                                         |
 |----------|--------------------|-------------------------------------------------|
@@ -102,7 +104,7 @@ WireMock của infra mount `vinspeed/wiremock/`; copy stub của dự án vào �
 | Secret   | `VPS_SSH_KEY`      | nội dung private key `pnh_deploy`               |
 | Secret   | `VPS_KNOWN_HOSTS`  | output `ssh-keyscan` (khuyến nghị)              |
 | Secret   | `VPS_PORT`         | tùy chọn, mặc định 22                           |
-| Variable | `DEPLOY_DIR`       | đường dẫn tuyệt đối, vd `/home/deploy/vinspeed/pnp` (mặc định `/opt/pnh`) |
+| Secret/Variable | `DEPLOY_DIR`       | đường dẫn tuyệt đối, vd `/home/deploy/vinspeed/pnp` (mặc định `/opt/pnh`) |
 | Variable | `APP_URL`          | tùy chọn, link hiển thị trên trang Actions      |
 
 VPS pull image bằng `GITHUB_TOKEN` của chính lần chạy workflow (login → pull → logout), không cần PAT.
