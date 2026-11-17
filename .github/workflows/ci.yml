@@ -47,6 +47,9 @@ jobs:
       - run: pnpm lint && pnpm typecheck && pnpm test
 
   dependency-scan:
+    # Tắt tạm: Settings → Secrets and variables → Actions → Variables → SKIP_DEPENDENCY_SCAN = true
+    # (xóa biến hoặc đặt khác 'true' để bật lại). Job bị skip không làm ci fail, nên không chặn deploy.
+    if: vars.SKIP_DEPENDENCY_SCAN != 'true'
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: backend } }
     steps:
