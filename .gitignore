@@ -8,7 +8,7 @@ Thumbs.db
 *.iml
 # Java / Maven
 backend/target/
-out/
+/out/
 *.class
 *.log
 # Node
@@ -25,3 +25,6 @@ frontend/test-results/
 # Build/tool state
 *.tsbuildinfo
 .claude/settings.local.json
+
+# Deploy secrets (VPS only)
+deploy/prod/app.env

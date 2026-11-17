@@ -1,0 +1,68 @@
+# Production stack for PNH on the VPS. It runs ONLY the app (backend + frontend) and reuses the
+# services of the shared vinspeed infra stack on network `vinspeed-network`:
+#   vinspeed-postgres:5432  vinspeed-redis:6379  vinspeed-kafka:9092
+#   vinspeed-mailpit:1025 (SMTP)  vinspeed-wiremock:8080 (mock SMS/FCM)
+# Hosts are addressed by container name, which is unique on the shared network.
+#
+#   .env      → interpolation: IMAGE_REGISTRY, IMAGE_TAG, FRONTEND_PORT (IMAGE_TAG is rewritten by deploy.sh)
+#   app.env   → backend runtime config/secrets (DB password, master key, Redis password, ...)
+#
+# Manual run:  docker compose run --rm kafka-init && docker compose up -d --wait
+name: pnh
+
+services:
+  # One-shot, run by deploy.sh before `up` (idempotent): docker compose run --rm kafka-init
+  # The infra broker auto-creates topics with 1 partition; this creates them with the intended counts.
+  kafka-init:
+    image: apache/kafka:4.3.0   # same image as vinspeed-kafka (already on the VPS)
+    profiles: [init]
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        T=/opt/kafka/bin/kafka-topics.sh
+        B=vinspeed-kafka:9092
+        $$T --bootstrap-server $$B --create --if-not-exists --topic pnh.notification.ingest     --partitions 12 --replication-factor 1
+        $$T --bootstrap-server $$B --create --if-not-exists --topic pnh.notification.ingest.otp --partitions 6  --replication-factor 1
+        $$T --bootstrap-server $$B --create --if-not-exists --topic pnh.notification.result     --partitions 12 --replication-factor 1
+        $$T --bootstrap-server $$B --create --if-not-exists --topic pnh.notification.ingest.DLT --partitions 3  --replication-factor 1
+        echo "topics ready"
+    networks: [vinspeed-network]
+
+  backend:
+    image: ${IMAGE_REGISTRY:?required}/backend:${IMAGE_TAG:?required}
+    restart: unless-stopped
+    env_file: [app.env]
+    environment:
+      PNH_DB_URL: ${PNH_DB_URL:-jdbc:postgresql://vinspeed-postgres:5432/pnh}
+      # bootstrap only; the broker then advertises PLAINTEXT://kafka:9092 (its service alias on vinspeed-network)
+      PNH_KAFKA: vinspeed-kafka:9092
+      PNH_REDIS: redis://vinspeed-redis:6379
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      SERVER_SHUTDOWN: graceful
+    stop_grace_period: 40s
+    mem_limit: 1g
+    networks:
+      vinspeed-network: {}   # postgres / redis / kafka / mailpit / wiremock; Prometheus scrapes pnh-backend-1:8080
+      pnh-internal:
+        aliases: [pnh-backend]
+    logging: &logging
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  frontend:
+    image: ${IMAGE_REGISTRY:?required}/frontend:${IMAGE_TAG:?required}
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8180}:8080"   # public qua Nginx trên host (TLS)
+    mem_limit: 128m
+    networks: [pnh-internal]   # only talks to the backend; never resolves other apps' `backend`
+    logging: *logging
+
+networks:
+  vinspeed-network:
+    external: true
+  pnh-internal: {}

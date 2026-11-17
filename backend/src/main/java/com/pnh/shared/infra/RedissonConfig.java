@@ -17,12 +17,17 @@ class RedissonConfig {
 
     @Bean(destroyMethod = "shutdown")
     RedissonClient redissonClient(
-            @Value("${pnh.redis.address}") String address, @Value("${pnh.redis.timeout-ms:1000}") int timeoutMs) {
+            @Value("${pnh.redis.address}") String address,
+            @Value("${pnh.redis.password:}") String password,
+            @Value("${pnh.redis.timeout-ms:1000}") int timeoutMs) {
         Config config = new Config();
         config.setLazyInitialization(true);
         config.setCodec(StringCodec.INSTANCE);
-        config.useSingleServer()
-                .setAddress(address)
+        var server = config.useSingleServer();
+        if (!password.isBlank()) {
+            server.setPassword(password);
+        }
+        server.setAddress(address)
                 .setTimeout(timeoutMs)
                 .setConnectTimeout(timeoutMs)
                 .setRetryAttempts(1)
