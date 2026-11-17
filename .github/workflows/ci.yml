@@ -53,6 +53,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21', cache: maven }
+      # NVD vulnerability database (~hundreds of MB): restore yesterday's copy so only the delta is downloaded
+      - name: Cache NVD data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ github.run_id }}
+          restore-keys: nvd-
       - name: OWASP dependency-check (fails on CVSS >= 7)
         run: ./mvnw -B -Psecurity-scan -DskipTests -DskipITs verify
         env:

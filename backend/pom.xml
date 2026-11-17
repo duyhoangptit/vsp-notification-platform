@@ -303,7 +303,11 @@
                         <groupId>org.owasp</groupId>
                         <artifactId>dependency-check-maven</artifactId>
                         <version>${dependency-check.version}</version>
-                        <configuration><failBuildOnCVSS>7</failBuildOnCVSS></configuration>
+                        <configuration>
+                            <failBuildOnCVSS>7</failBuildOnCVSS>
+                            <!-- read the key from env (GitHub secret NVD_API_KEY); without it the NVD download is very slow -->
+                            <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                        </configuration>
                         <executions><execution><goals><goal>check</goal></goals></execution></executions>
                     </plugin>
                 </plugins>
