@@ -114,7 +114,14 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           if [[ -n "$KNOWN_HOSTS" ]]; then
-            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+            # Keep only the key type + key of each entry and pin them to VPS_HOST, so the secret works
+            # whatever host form ssh-keyscan printed (IP vs domain, [host]:port, hashed |1|...).
+            printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' \
+              | awk -v h="$VPS_HOST" '!/^[[:space:]]*(#|$)/ && NF >= 3 { print h, $(NF-1), $NF }' > ~/.ssh/known_hosts
+            [[ -s ~/.ssh/known_hosts ]] || { echo "::error::VPS_KNOWN_HOSTS has no usable 'host keytype key' line"; exit 1; }
+            echo "Trusted host keys (from VPS_KNOWN_HOSTS):"; ssh-keygen -lf ~/.ssh/known_hosts
+            echo "Keys the server presents now (compare SHA256 values):"
+            ssh-keyscan -p "$SSH_PORT" "$VPS_HOST" 2>/dev/null | ssh-keygen -lf - || echo "  (ssh-keyscan could not reach $VPS_HOST:$SSH_PORT)"
           else
             echo "::warning::VPS_KNOWN_HOSTS not set — trusting host key from ssh-keyscan"
             ssh-keyscan -p "$SSH_PORT" "$VPS_HOST" > ~/.ssh/known_hosts
