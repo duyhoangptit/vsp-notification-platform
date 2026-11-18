@@ -145,11 +145,11 @@ jobs:
           printf 'Host vps\n  HostName %s\n  User %s\n  Port %s\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n  HostKeyAlias %s\n  ServerAliveInterval 30\n' \
             "$VPS_HOST" "$VPS_USER" "$SSH_PORT" "$VPS_HOST" > ~/.ssh/config
 
+      # Only the files needed to run. .env / app.env live on the VPS only and are never touched here.
       - name: Upload compose files
         run: |
           ssh vps "mkdir -p '$DEPLOY_DIR'"
-          scp deploy/prod/compose.yaml deploy/prod/deploy.sh deploy/prod/env.example deploy/prod/app.env.example \
-            "vps:$DEPLOY_DIR/"
+          scp deploy/prod/compose.yaml deploy/prod/deploy.sh "vps:$DEPLOY_DIR/"
 
       - name: Pull & restart on VPS
         env:

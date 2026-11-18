@@ -50,7 +50,7 @@ ssh-copy-id -i pnh_deploy.pub deploy@<vps>
 ssh-keyscan -p 22 <vps>      # → giá trị cho secret VPS_KNOWN_HOSTS
 ```
 
-Tạo file cấu hình trên VPS (workflow sẽ copy `compose.yaml`, `deploy.sh`, `*.example` vào `$DEPLOY_DIR` mỗi lần deploy, nhưng **không bao giờ** đụng tới `.env` / `app.env`):
+Tạo file cấu hình trên VPS (workflow chỉ copy `compose.yaml` và `deploy.sh` vào `$DEPLOY_DIR` mỗi lần deploy, nhưng **không bao giờ** đụng tới `.env` / `app.env`):
 
 ```bash
 cd <vinspeed>/pnp
@@ -60,7 +60,7 @@ cp app.env.example app.env && chmod 600 app.env
 # PNH_MASTER_KEY (openssl rand -base64 32 — nhớ backup), PNH_CONSOLE_BASE_URL
 ```
 
-> Lần deploy đầu tiên, nếu chưa có `env.example` trên VPS, hãy chạy workflow một lần (bước upload chạy trước bước deploy), rồi tạo `.env`/`app.env` và chạy lại.
+> `env.example` / `app.env.example` chỉ là mẫu trong repo: tạo `.env` / `app.env` trên VPS một lần theo mẫu (workflow không copy chúng).
 
 ## 2. Nginx trên host (TLS)
 
