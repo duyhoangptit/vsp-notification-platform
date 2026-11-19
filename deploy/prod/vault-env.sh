@@ -5,7 +5,7 @@
 # <vault-env-file> (root, chmod 600) defines:
 #   VAULT_ADDR=http://127.0.0.1:8200
 #   VAULT_ROLE_ID=...        VAULT_SECRET_ID=...      (AppRole, read-only policy)
-#   VAULT_KV_PATH=kv/pnh/prod                         (<mount>/<path>; KV v1 or v2)
+#   VAULT_KV_PATH=kv/vinspeed/notification            (<mount>/<path>; KV v1 or v2)
 # Each key of the secret is written as KEY='value' (read verbatim by Compose env_file; no ' inside). On any error the output
 # file is left untouched.
 set -euo pipefail

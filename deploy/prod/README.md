@@ -113,7 +113,7 @@ VPS pull image bằng `GITHUB_TOKEN` của chính lần chạy workflow (login �
 ## 4. Secrets từ Vault (khuyến nghị)
 
 Khi có file `/etc/pnh/vault.env`, mỗi lần deploy `deploy.sh` chạy `vault-env.sh`: login AppRole vào Vault của VPS,
-đọc `kv/pnh/prod`, **sinh lại `app.env`** (mỗi key Vault = một biến môi trường), rồi mới `docker compose up`.
+đọc `kv/vinspeed/notification`, **sinh lại `app.env`** (mỗi key Vault = một biến môi trường), rồi mới `docker compose up`.
 App không đổi gì. Không có file đó thì `app.env` viết tay được dùng như cũ (kèm cảnh báo).
 
 - Vault sealed / không truy cập được / thiếu key ⇒ deploy **dừng trước khi đổi bất cứ gì**, bản đang chạy giữ nguyên.
@@ -145,9 +145,13 @@ v secrets list -detailed | awk 'NR==1 || $1=="kv/"' | cut -c1-200
 
 # AppRole + policy chỉ đọc đúng 1 path (cả dạng v1 lẫn v2)
 v auth list | grep -q '^approle/' || v auth enable approle
-printf 'path "kv/data/pnh/prod" { capabilities = ["read"] }\npath "kv/pnh/prod" { capabilities = ["read"] }\n' \
+printf 'path "kv/data/vinspeed/notification" { capabilities = ["read"] }\npath "kv/vinspeed/notification" { capabilities = ["read"] }\n' \
   | v policy write pnh-deploy -
 v write auth/approle/role/pnh-deploy token_policies=pnh-deploy token_ttl=5m token_max_ttl=10m secret_id_ttl=0
+
+# Path đã có dữ liệu? (`kv put` bên dưới GHI ĐÈ toàn bộ path). Có key rồi thì BỎ QUA bước nạp,
+# chỉ cần mỗi key đặt đúng tên biến môi trường (PNH_DB_PASSWORD, ...) — xem danh sách key:
+v kv get -format=json kv/vinspeed/notification 2>/dev/null | jq -r '(.data.data // .data) | keys[]' || echo "(path trống)"
 
 # Nạp toàn bộ app.env hiện tại vào Vault (không in giá trị), rồi xem danh sách key.
 # Lấy giá trị đúng như container đang nhận (Compose đã bỏ nháy, comment...), chỉ các key có trong app.env.
@@ -156,14 +160,14 @@ docker compose config --format json \
   | jq --argjson keys "$KEYS" '.services.backend.environment
       | with_entries(select(.key as $k | $keys | index($k)))
       | map_values((. // "") | gsub("\\$\\$"; "$"))' \
-  | v kv put kv/pnh/prod -
-v kv get -format=json kv/pnh/prod | jq -r '(.data.data // .data) | keys[]'
+  | v kv put kv/vinspeed/notification -
+v kv get -format=json kv/vinspeed/notification | jq -r '(.data.data // .data) | keys[]'
 
 # File đăng nhập cho deploy.sh — thuộc user mà GitHub Actions SSH vào (VPS_USER), mode 600
 ROLE_ID=$(v read -field=role_id auth/approle/role/pnh-deploy/role-id)
 SECRET_ID=$(v write -f -field=secret_id auth/approle/role/pnh-deploy/secret-id)
 sudo install -d -m 700 -o "$(id -un)" -g "$(id -gn)" /etc/pnh
-( umask 077; printf 'VAULT_ADDR=http://127.0.0.1:8200\nVAULT_ROLE_ID=%s\nVAULT_SECRET_ID=%s\nVAULT_KV_PATH=kv/pnh/prod\n' \
+( umask 077; printf 'VAULT_ADDR=http://127.0.0.1:8200\nVAULT_ROLE_ID=%s\nVAULT_SECRET_ID=%s\nVAULT_KV_PATH=kv/vinspeed/notification\n' \
     "$ROLE_ID" "$SECRET_ID" > /etc/pnh/vault.env )
 unset ROLE_ID SECRET_ID
 
@@ -189,9 +193,9 @@ v() { docker exec -i -e VAULT_TOKEN -e VAULT_ADDR=http://127.0.0.1:8200 vault va
 
 # KV v2: giá trị đọc từ stdin (không lộ trên dòng lệnh / history)
 read -rs -p "Giá trị mới: " NEW; echo
-printf '%s' "$NEW" | v kv patch kv/pnh/prod PNH_DB_PASSWORD=-
+printf '%s' "$NEW" | v kv patch kv/vinspeed/notification PNH_DB_PASSWORD=-
 unset NEW VAULT_TOKEN
-# KV v1 không có patch: dùng `v kv put kv/pnh/prod -` với JSON đầy đủ như mục 4.1
+# KV v1 không có patch: dùng `v kv put kv/vinspeed/notification -` với JSON đầy đủ như mục 4.1
 ```
 
 Sau đó deploy lại để áp dụng: Actions → **deploy** → *Run workflow* với `tag` = SHA đang chạy
@@ -204,7 +208,7 @@ Sau đó deploy lại để áp dụng: Actions → **deploy** → *Run workflow
 | `vault is sealed` | Unseal Vault (UI hoặc `docker exec -it vault vault operator unseal` ×3), chạy lại deploy |
 | `cannot reach http://127.0.0.1:8200` | Container `vault` không chạy: `docker ps \| grep vault` |
 | `login failed (HTTP 400)` | `secret_id` sai/đã huỷ → tạo lại (mục 4.4) |
-| `no secret readable at kv/pnh/prod` | Chưa nạp secret, đã xoá, hoặc policy sai → `v kv get kv/pnh/prod` bằng root token |
+| `no secret readable at kv/vinspeed/notification` | Chưa nạp secret, đã xoá, hoặc policy sai → `v kv get kv/vinspeed/notification` bằng root token |
 | `required key ... is missing or empty` | Thêm key đó vào Vault (mục 4.2) |
 | `must be mode 600` | `chmod 600 /etc/pnh/vault.env` |
 | `cannot access /etc/pnh/vault.env as ...` | File/thư mục thuộc user khác: `sudo chown -R <VPS_USER>: /etc/pnh` |

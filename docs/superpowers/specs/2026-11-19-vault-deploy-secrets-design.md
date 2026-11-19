@@ -17,10 +17,10 @@ không còn sửa tay `app.env`. App Spring không đổi một dòng nào.
 - C: Vault Agent sidecar + entrypoint — sửa image, app lại phụ thuộc Vault mỗi lần start.
 
 ## Thiết kế
-- **Dữ liệu:** KV v2, path `<mount>/pnh/prod`. Mỗi key đặt **đúng tên biến môi trường** (`PNH_DB_PASSWORD`,
+- **Dữ liệu:** KV v2, path `<mount>/vinspeed/notification`. Mỗi key đặt **đúng tên biến môi trường** (`PNH_DB_PASSWORD`,
   `PNH_REDIS_PASSWORD`, `PNH_MASTER_KEY`, `PNH_MASTER_KEY_ID`, `PNH_CONSOLE_BASE_URL`, ...) — toàn bộ nội dung
   `app.env` hiện tại chuyển vào đây, để Vault là nguồn duy nhất.
-- **Quyền:** policy `pnh-deploy` chỉ `read` trên `<mount>/data/pnh/prod`. AppRole `pnh-deploy`: token_ttl 5m,
+- **Quyền:** policy `pnh-deploy` chỉ `read` trên `<mount>/data/vinspeed/notification`. AppRole `pnh-deploy`: token_ttl 5m,
   secret_id không hết hạn. Thông tin đăng nhập ở `/etc/pnh/vault.env` (thuộc user deploy SSH vào — VPS_USER, chmod 600):
   `VAULT_ADDR`, `VAULT_ROLE_ID`, `VAULT_SECRET_ID`, `VAULT_KV_PATH`.
 - **deploy.sh:** nếu có `/etc/pnh/vault.env` → login AppRole (curl + jq) → đọc secret → kiểm tra các key bắt buộc
