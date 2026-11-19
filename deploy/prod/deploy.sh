@@ -9,7 +9,17 @@ NEW_TAG="${1:?usage: deploy.sh <image-tag>}"
 cd "$(dirname "$0")"
 
 [[ -f .env ]]    || { echo "missing .env (cp env.example .env)"; exit 1; }
-[[ -f app.env ]] || { echo "missing app.env (cp app.env.example app.env)"; exit 1; }
+
+# Backend config/secrets: rendered from Vault when its AppRole config exists (see README "Secrets từ Vault"),
+# otherwise the hand-written app.env is used as is. A Vault error stops here, before anything changes.
+VAULT_ENV="${PNH_VAULT_ENV:-/etc/pnh/vault.env}"
+if [[ -f "$VAULT_ENV" ]]; then
+  echo "==> loading app.env from Vault"
+  ./vault-env.sh "$VAULT_ENV" app.env || { echo "!! Vault: deploy aborted, nothing changed"; exit 1; }
+else
+  echo "::warning::${VAULT_ENV} not found — using existing app.env"
+fi
+[[ -f app.env ]] || { echo "missing app.env (cp app.env.example app.env, or set up Vault)"; exit 1; }
 
 PREV_TAG="$(sed -n 's/^IMAGE_TAG=//p' .env)"
 
