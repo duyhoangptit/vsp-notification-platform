@@ -45,14 +45,14 @@ REQ='{"PNH_DB_PASSWORD":"db-pw","PNH_REDIS_PASSWORD":"redis-pw","PNH_MASTER_KEY"
 # shellcheck disable=SC2016  # literal $c on purpose: must be written verbatim
 TRICKY='a=b $c #d "e"'
 with() { jq -cn --argjson r "$REQ" --argjson extra "$1" '$r + $extra'; }  # required keys + extra
-QUOTE="it's"
-OK="$(with "$(jq -cn --arg t "$TRICKY" --arg q "$QUOTE" '{PNH_X:$t, PNH_S:$q, PNH_E:""}')")"
+OK="$(with "$(jq -cn --arg t "$TRICKY" '{PNH_X:$t, PNH_E:""}')")"
 api POST kv2/data/pnh/ok "{\"data\":$OK}" >/dev/null
 api POST kv1/pnh/ok "$OK" >/dev/null
 api POST kv2/data/pnh/missing '{"data":{"PNH_DB_PASSWORD":"x","PNH_REDIS_PASSWORD":"y"}}' >/dev/null
 api POST kv2/data/pnh/nl "{\"data\":$(with '{"PNH_Y":"a\nb"}')}" >/dev/null
 api POST kv2/data/pnh/badkey "{\"data\":$(with '{"pnh-lower":"x"}')}" >/dev/null
 api POST kv2/data/pnh/backslash "{\"data\":$(with '{"PNH_T":"x\\\\"}')}" >/dev/null
+api POST kv2/data/pnh/squote "{\"data\":$(with "$(jq -cn --arg v "it's" '{PNH_S:$v}')")}" >/dev/null
 api POST kv2/data/pnh/bsquote "{\"data\":$(with "$(jq -cn --arg v "a\\'b" '{PNH_T:$v}')")}" >/dev/null
 
 # cfg FILE KV_PATH [ADDR] [SECRET_ID] [MODE]
@@ -90,12 +90,18 @@ expect_ok() { # NAME KV_PATH
   # what the container actually receives through Compose env_file (default format)
   local got; got="$(compose_env "$out")"
   grep -qxF "PNH_X=$TRICKY" <<<"$got" || { fail "$name" "PNH_X mangled by compose: $(grep PNH_X <<<"$got")"; return; }
-  grep -qxF "PNH_S=$QUOTE" <<<"$got" || { fail "$name" "PNH_S mangled by compose: $(grep PNH_S <<<"$got")"; return; }
   grep -qxF "PNH_E=" <<<"$got" || { fail "$name" "PNH_E missing"; return; }
   grep -qxF "PNH_MASTER_KEY=bWFzdGVy" <<<"$got" || { fail "$name" "missing PNH_MASTER_KEY"; return; }
   [[ "$(mode_of "$out")" == 600 ]] || { fail "$name" "mode $(mode_of "$out")"; return; }
   pass "$name"
 }
+
+# PATH spies: record the argv of every jq / curl the script runs
+SPY="$WORK/spy"; mkdir -p "$SPY"
+for b in jq curl; do
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/argv.log"\nexec %s "$@"\n' "$WORK" "$(command -v "$b")" > "$SPY/$b"
+  chmod +x "$SPY/$b"
+done
 
 # --- cases --------------------------------------------------------------------
 before_acc="$(accessors)"
@@ -103,11 +109,18 @@ expect_ok v2_ok kv2/pnh/ok
 if [[ "$(accessors)" == "$before_acc" ]]; then pass token_revoked; else fail token_revoked "token accessors $before_acc -> $(accessors)"; fi
 expect_ok v1_ok kv1/pnh/ok
 
+cfg "$WORK/argv.cfg" kv2/pnh/ok; : > "$WORK/argv.log"
+PATH="$SPY:$PATH" "$SUT" "$WORK/argv.cfg" "$WORK/argv.env" 2>/dev/null || true
+if [[ ! -s "$WORK/argv.log" ]]; then fail no_secret_in_argv "spy recorded nothing"
+elif grep -qF -e "$SECRET_ID" -e "$ROLE_ID" "$WORK/argv.log"; then fail no_secret_in_argv "role_id/secret_id seen in a child argv"
+else pass no_secret_in_argv; fi
+
 expect_fail missing_required kv2/pnh/missing "PNH_MASTER_KEY"
 expect_fail newline_value kv2/pnh/nl "newline"
 expect_fail bad_key kv2/pnh/badkey "invalid key"
 expect_fail trailing_backslash kv2/pnh/backslash "backslash"
-expect_fail backslash_quote kv2/pnh/bsquote "backslash"
+expect_fail backslash_quote kv2/pnh/bsquote "single quote"
+expect_fail single_quote kv2/pnh/squote "single quote"
 expect_fail unreachable kv2/pnh/ok "cannot reach" "http://127.0.0.1:1"
 expect_fail bad_secret_id kv2/pnh/ok "login failed" "" "00000000-0000-0000-0000-000000000000"
 expect_fail perm_644 kv2/pnh/ok "must be mode 600" "" "" 644
