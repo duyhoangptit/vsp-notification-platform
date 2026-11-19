@@ -45,12 +45,15 @@ REQ='{"PNH_DB_PASSWORD":"db-pw","PNH_REDIS_PASSWORD":"redis-pw","PNH_MASTER_KEY"
 # shellcheck disable=SC2016  # literal $c on purpose: must be written verbatim
 TRICKY='a=b $c #d "e"'
 with() { jq -cn --argjson r "$REQ" --argjson extra "$1" '$r + $extra'; }  # required keys + extra
-OK="$(with "$(jq -cn --arg t "$TRICKY" '{PNH_X:$t}')")"
+QUOTE="it's"
+OK="$(with "$(jq -cn --arg t "$TRICKY" --arg q "$QUOTE" '{PNH_X:$t, PNH_S:$q, PNH_E:""}')")"
 api POST kv2/data/pnh/ok "{\"data\":$OK}" >/dev/null
 api POST kv1/pnh/ok "$OK" >/dev/null
 api POST kv2/data/pnh/missing '{"data":{"PNH_DB_PASSWORD":"x","PNH_REDIS_PASSWORD":"y"}}' >/dev/null
 api POST kv2/data/pnh/nl "{\"data\":$(with '{"PNH_Y":"a\nb"}')}" >/dev/null
 api POST kv2/data/pnh/badkey "{\"data\":$(with '{"pnh-lower":"x"}')}" >/dev/null
+api POST kv2/data/pnh/backslash "{\"data\":$(with '{"PNH_T":"x\\\\"}')}" >/dev/null
+api POST kv2/data/pnh/bsquote "{\"data\":$(with "$(jq -cn --arg v "a\\'b" '{PNH_T:$v}')")}" >/dev/null
 
 # cfg FILE KV_PATH [ADDR] [SECRET_ID] [MODE]
 cfg() {
@@ -61,6 +64,13 @@ cfg() {
 mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
 sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 accessors() { curl -sf -X LIST -H "X-Vault-Token: root" "$ADDR/v1/auth/token/accessors" | jq '.data.keys | length'; }
+
+compose_env() { # print PNH_* env a container gets from env file $1 via docker compose
+  local d; d="$(mktemp -d "$WORK/compose.XXXX")"
+  cp "$1" "$d/app.env"
+  printf 'services:\n  t:\n    image: alpine:3.20\n    env_file: [app.env]\n    command: ["sh", "-c", "env | grep ^PNH_"]\n' > "$d/compose.yaml"
+  (cd "$d" && docker compose -p "vaultenvtest$$" run --rm -q t 2>/dev/null)
+}
 
 # expect_fail NAME KV_PATH STDERR_SUBSTRING [ADDR] [SECRET_ID] [MODE]
 expect_fail() {
@@ -77,8 +87,12 @@ expect_ok() { # NAME KV_PATH
   local name="$1" out="$WORK/$1.env" c="$WORK/$1.cfg"
   cfg "$c" "$2"
   if ! "$SUT" "$c" "$out" 2>"$WORK/$1.err"; then fail "$name" "exit != 0: $(cat "$WORK/$1.err")"; return; fi
-  grep -qxF "PNH_X=$TRICKY" "$out" || { fail "$name" "missing tricky line: $(cat "$out")"; return; }
-  grep -qxF "PNH_MASTER_KEY=bWFzdGVy" "$out" || { fail "$name" "missing PNH_MASTER_KEY"; return; }
+  # what the container actually receives through Compose env_file (default format)
+  local got; got="$(compose_env "$out")"
+  grep -qxF "PNH_X=$TRICKY" <<<"$got" || { fail "$name" "PNH_X mangled by compose: $(grep PNH_X <<<"$got")"; return; }
+  grep -qxF "PNH_S=$QUOTE" <<<"$got" || { fail "$name" "PNH_S mangled by compose: $(grep PNH_S <<<"$got")"; return; }
+  grep -qxF "PNH_E=" <<<"$got" || { fail "$name" "PNH_E missing"; return; }
+  grep -qxF "PNH_MASTER_KEY=bWFzdGVy" <<<"$got" || { fail "$name" "missing PNH_MASTER_KEY"; return; }
   [[ "$(mode_of "$out")" == 600 ]] || { fail "$name" "mode $(mode_of "$out")"; return; }
   pass "$name"
 }
@@ -92,6 +106,8 @@ expect_ok v1_ok kv1/pnh/ok
 expect_fail missing_required kv2/pnh/missing "PNH_MASTER_KEY"
 expect_fail newline_value kv2/pnh/nl "newline"
 expect_fail bad_key kv2/pnh/badkey "invalid key"
+expect_fail trailing_backslash kv2/pnh/backslash "backslash"
+expect_fail backslash_quote kv2/pnh/bsquote "backslash"
 expect_fail unreachable kv2/pnh/ok "cannot reach" "http://127.0.0.1:1"
 expect_fail bad_secret_id kv2/pnh/ok "login failed" "" "00000000-0000-0000-0000-000000000000"
 expect_fail perm_644 kv2/pnh/ok "must be mode 600" "" "" 644
