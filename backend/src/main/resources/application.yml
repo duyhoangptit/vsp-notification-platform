@@ -135,7 +135,7 @@ pnh:
     master-key-id: ${PNH_MASTER_KEY_ID:k1}
   clock:
     mode: system
-    override-enabled: false
+    override-enabled: ${PNH_CLOCK_OVERRIDE_ENABLE:false}
   delivery:
     stuck-timeout: 5m
     processing-timeout: 15m
