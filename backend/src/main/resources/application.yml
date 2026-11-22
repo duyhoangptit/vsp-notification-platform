@@ -3,7 +3,7 @@ spring:
     name: pnh
   threads:
     virtual:
-      enabled: false
+      enabled: true
   datasource:
     url: ${PNH_DB_URL:jdbc:postgresql://localhost:15432/pnh}
     username: ${PNH_DB_USER:pnh}

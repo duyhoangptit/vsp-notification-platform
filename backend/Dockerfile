@@ -20,11 +20,10 @@ RUN --mount=type=cache,target=/root/.m2 \
  && java -Djarmode=tools -jar target/pnh.jar extract --layers --launcher --destination /extracted
 
 # ─── Runtime ──────────────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd --system pnh && useradd --system --gid pnh --home /app pnh
+FROM eclipse-temurin:21-jre-alpine
+# gcompat: snappy-java (Kafka compression) ships a glibc-linked .so; without it amd64 fails to load it on musl
+RUN apk add --no-cache gcompat \
+ && addgroup -S pnh && adduser -S -G pnh -h /app pnh
 WORKDIR /app
 
 COPY --from=build /extracted/dependencies/ ./
@@ -37,6 +36,6 @@ EXPOSE 8080
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
-  CMD curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
+  CMD wget -qO- http://127.0.0.1:8080/actuator/health/readiness >/dev/null || exit 1
 
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
