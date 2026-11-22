@@ -6,7 +6,7 @@ on:
 
 env:
   # TẠM THỜI bỏ qua test backend (unit + integration + coverage gate). Đổi thành 'false' để bật lại.
-  SKIP_BACKEND_TESTS: 'true'
+  SKIP_BACKEND_TESTS: 'false'
 
 jobs:
   backend:
