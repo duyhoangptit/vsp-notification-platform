@@ -19,7 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(classes = PnhApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@org.springframework.context.annotation.Import(TestDataFactory.class)
+@org.springframework.context.annotation.Import({TestDataFactory.class, TestStaffJwt.class})
 public abstract class IntegrationTestBase {
 
     @Autowired

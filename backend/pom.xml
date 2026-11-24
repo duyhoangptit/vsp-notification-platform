@@ -78,6 +78,8 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webmvc</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security</artifactId></dependency>
+        <!-- Console API also accepts identity-service staff JWTs (SSO from vsp-frontend Platform Console) -->
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId></dependency>
         <!-- console sessions in PostgreSQL: shared by all replicas behind a plain load balancer -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-session-jdbc</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>

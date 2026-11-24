@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-/** {@code GET /console/api/config-change-log} — ADMIN only (T172). */
+/** {@code GET /console/api/config-change-log} — permission notification.audit.view (T172). */
 @RestController
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAuthority('notification.audit.view')")
 class ConfigChangeLogController {
 
     record Entry(

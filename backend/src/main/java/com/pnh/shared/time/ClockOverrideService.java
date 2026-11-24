@@ -1,41 +1,40 @@
 package com.pnh.shared.time;
 
-import com.pnh.shared.audit.ConfigChanged;
-import com.pnh.shared.domain.ErrorCode;
 import com.pnh.shared.infra.PartitionService;
 import com.pnh.shared.infra.RedisAvailability;
-import com.pnh.shared.web.PnhException;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
 import org.redisson.client.codec.StringCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Runtime system-time override for non-production environments (R29). State lives in Redis key
- * {@code pnh:clock:override} and is broadcast on topic {@code pnh:clock}; partitions for the new month (+3) are
- * created BEFORE the switch (fix H2). Redis down → configured mode stays in effect.
+ * Follows the VSP system clock owned by <b>vsp-catalog-service</b> ({@code PUT/DELETE /api/v1/admin/system-clock})
+ * in non-production environments. Catalog keeps the state in its database and publishes it on Redis key
+ * {@code vsp:clock:override} (absent = SYSTEM) and topic {@code vsp:clock}; this service only applies it.
+ *
+ * <p>Partitions for the target month (+3) are created BEFORE switching; if that fails the change is ignored (the
+ * current time stays in effect) and logged. Redis down → configured mode stays in effect; a periodic resync re-reads
+ * the key so a missed broadcast is caught up.
  */
 @Service
 public class ClockOverrideService {
 
-    public static final String KEY = "pnh:clock:override";
-    public static final String TOPIC = "pnh:clock";
     private static final Logger log = LoggerFactory.getLogger(ClockOverrideService.class);
+    private static final int PARTITION_ATTEMPTS = 3;
 
+    /** Contract published by vsp-catalog-service ({@code ClockOverrideMessage}); JSON snake_case. */
     record StoredState(String mode, Instant fixedInstant, String offset, String changedBy, Instant changedAt) {}
 
     private final PnhClock clock;
@@ -43,11 +42,9 @@ public class ClockOverrideService {
     private final RedissonClient redisson;
     private final RedisAvailability availability;
     private final PartitionService partitions;
-    private final ApplicationEventPublisher events;
-    private final TransactionTemplate tx;
     private final JsonMapper json;
-    private volatile String changedBy;
-    private volatile Instant changedAt;
+    private volatile StoredState applied;
+    private volatile Integer listenerId;
 
     public ClockOverrideService(
             PnhClock clock,
@@ -55,8 +52,6 @@ public class ClockOverrideService {
             RedissonClient redisson,
             RedisAvailability availability,
             PartitionService partitions,
-            ApplicationEventPublisher events,
-            TransactionTemplate tx,
             JsonMapper json,
             MeterRegistry meters) {
         this.clock = clock;
@@ -64,8 +59,6 @@ public class ClockOverrideService {
         this.redisson = redisson;
         this.availability = availability;
         this.partitions = partitions;
-        this.events = events;
-        this.tx = tx;
         this.json = json;
         Gauge.builder("pnh.clock.override.active", clock, c -> c.mode() == ClockMode.SYSTEM ? 0 : 1)
                 .register(meters);
@@ -77,6 +70,7 @@ public class ClockOverrideService {
 
     public ClockState state() {
         Duration offset = clock.mode() == ClockMode.OFFSET ? clock.offset() : null;
+        StoredState s = applied;
         return new ClockState(
                 clock.mode(),
                 clock.instant(),
@@ -84,132 +78,58 @@ public class ClockOverrideService {
                 clock.fixedInstant(),
                 offset == null ? null : offset.toString(),
                 properties.overrideEnabled(),
-                changedBy,
-                changedAt);
+                s == null ? null : s.changedBy(),
+                s == null ? null : s.changedAt());
     }
 
-    public ClockState override(ClockMode mode, Instant fixedInstant, String offset, String actor) {
-        requireEnabled();
-        Instant target;
-        Duration duration = null;
-        switch (mode) {
-            case FIXED -> {
-                if (fixedInstant == null) {
-                    throw PnhException.field(
-                            ErrorCode.VALIDATION_ERROR, "fixed_instant", "fixed_instant is required for FIXED");
-                }
-                target = fixedInstant;
-            }
-            case OFFSET -> {
-                if (offset == null || offset.isBlank()) {
-                    throw PnhException.field(ErrorCode.VALIDATION_ERROR, "offset", "offset is required for OFFSET");
-                }
-                try {
-                    duration = Duration.parse(offset.trim());
-                } catch (java.time.format.DateTimeParseException e) {
-                    throw PnhException.field(
-                            ErrorCode.VALIDATION_ERROR, "offset", "offset must be an ISO-8601 duration");
-                }
-                target = clock.realInstant().plus(duration);
-            }
-            default -> throw PnhException.field(ErrorCode.VALIDATION_ERROR, "mode", "mode must be FIXED or OFFSET");
+    /** Applies a published state; a non-SYSTEM state whose partitions cannot be created is ignored. */
+    synchronized void apply(StoredState s) {
+        if (Objects.equals(s, applied)) {
+            return;
         }
-        try {
-            partitions.ensureMonths(target, 3);
-        } catch (RuntimeException e) {
-            log.warn("Clock override rejected: partitions for {} could not be created", target, e);
-            throw new PnhException(
-                    ErrorCode.VALIDATION_ERROR, "Partitions for the requested time could not be created");
-        }
-        ClockState before = state();
-        Instant now = clock.realInstant();
-        StoredState stored = new StoredState(
-                mode.name(),
-                mode == ClockMode.FIXED ? fixedInstant : null,
-                duration == null ? null : duration.toString(),
-                actor,
-                now);
-        apply(stored);
-        persistAndBroadcast(stored);
-        audit(before, actor, now);
-        return state();
-    }
-
-    public ClockState reset(String actor) {
-        requireEnabled();
-        ClockState before = state();
-        Instant now = clock.realInstant();
-        StoredState stored = new StoredState(ClockMode.SYSTEM.name(), null, null, actor, now);
-        clock.apply(properties); // configured startup mode (normally SYSTEM)
-        changedBy = actor;
-        changedAt = now;
-        try {
-            redisson.getBucket(KEY, StringCodec.INSTANCE).delete();
-            topic().publish(json.writeValueAsString(stored));
-            availability.markSuccess();
-        } catch (RuntimeException e) {
-            availability.markFailure(e);
-        }
-        audit(before, actor, now);
-        return state();
-    }
-
-    private void requireEnabled() {
-        if (!properties.overrideEnabled()) {
-            throw new PnhException(ErrorCode.NOT_FOUND, "Clock override is disabled");
-        }
-    }
-
-    void apply(StoredState s) {
         ClockMode mode = ClockMode.valueOf(s.mode());
+        if (mode != ClockMode.SYSTEM && !ensurePartitions(s)) {
+            return;
+        }
         switch (mode) {
             case SYSTEM -> clock.apply(properties);
-            case FIXED -> clock.setFixed(s.fixedInstant());
+            case FIXED -> clock.setFixed(Objects.requireNonNull(s.fixedInstant(), "fixed_instant"));
             case OFFSET -> clock.setOffset(Duration.parse(s.offset()));
         }
-        changedBy = s.changedBy();
-        changedAt = s.changedAt();
-    }
-
-    private void persistAndBroadcast(StoredState s) {
-        try {
-            String payload = json.writeValueAsString(s);
-            redisson.getBucket(KEY, StringCodec.INSTANCE).set(payload);
-            topic().publish(payload);
-            availability.markSuccess();
-        } catch (RuntimeException e) {
-            availability.markFailure(e);
-            log.warn("Clock override applied locally only (Redis unavailable)");
+        applied = s;
+        if (mode != ClockMode.SYSTEM) {
+            log.warn("System time override active (set by {}): {} -> now = {}", s.changedBy(), mode, clock.instant());
+        } else {
+            log.info("System time back to configured mode {}", properties.mode());
         }
     }
 
-    private void audit(ClockState before, String actor, Instant at) {
-        ClockState after = state();
-        tx.executeWithoutResult(status -> events.publishEvent(new ConfigChanged(
-                "CLOCK_OVERRIDE",
-                "clock",
-                "UPDATE",
-                0,
-                snapshot(before),
-                snapshot(after),
-                Set.of(),
-                Set.of(),
-                actor,
-                at)));
-    }
-
-    private static Map<String, Object> snapshot(ClockState s) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("mode", s.mode().name());
-        m.put(
-                "fixed_instant",
-                s.fixedInstant() == null ? null : s.fixedInstant().toString());
-        m.put("offset", s.offset());
-        return m;
+    /**
+     * Every instance receives the broadcast at the same moment and creates the partitions concurrently; the loser of
+     * that race gets "relation already exists", so retry (the partitions then exist and the call is a no-op).
+     */
+    private boolean ensurePartitions(StoredState s) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                partitions.ensureMonths(targetOf(s), 3);
+                return true;
+            } catch (RuntimeException e) {
+                if (attempt >= PARTITION_ATTEMPTS) {
+                    log.warn("Ignoring clock override {}: partitions for the target time could not be created", s, e);
+                    return false;
+                }
+                try {
+                    Thread.sleep(ThreadLocalRandom.current().nextLong(100, 300) * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
     }
 
     private RTopic topic() {
-        return redisson.getTopic(TOPIC, StringCodec.INSTANCE);
+        return redisson.getTopic(properties.topic(), StringCodec.INSTANCE);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -217,30 +137,56 @@ public class ClockOverrideService {
         if (!properties.overrideEnabled()) {
             return;
         }
+        subscribe();
+        resync();
+    }
+
+    private void subscribe() {
+        if (listenerId != null) {
+            return;
+        }
         try {
-            topic().addListener(String.class, (channel, msg) -> {
+            listenerId = topic().addListener(String.class, (channel, msg) -> {
                 try {
-                    StoredState s = json.readValue(msg, StoredState.class);
-                    if (ClockMode.valueOf(s.mode()) != ClockMode.SYSTEM) {
-                        partitions.ensureMonths(targetOf(s), 3);
-                    }
-                    apply(s);
+                    apply(json.readValue(msg, StoredState.class));
                 } catch (RuntimeException e) {
                     log.warn("Ignoring invalid clock override message", e);
                 }
             });
-            Object stored = redisson.getBucket(KEY, StringCodec.INSTANCE).get();
-            if (stored != null) {
-                StoredState s = json.readValue(stored.toString(), StoredState.class);
-                partitions.ensureMonths(targetOf(s), 3);
-                apply(s);
-                log.warn("System time override active: {} -> now = {}", s.mode(), clock.instant());
-            }
             availability.markSuccess();
         } catch (RuntimeException e) {
             availability.markFailure(e);
             log.warn(
-                    "Clock override state not loaded (Redis unavailable); using configured mode {}", properties.mode());
+                    "Could not subscribe to {} (Redis unavailable); using configured mode {}",
+                    properties.topic(),
+                    properties.mode());
+        }
+    }
+
+    /** Re-reads the key: catches up after a missed broadcast or a Redis outage. */
+    @Scheduled(
+            fixedDelayString = "${pnh.clock.resync-interval:60s}",
+            initialDelayString = "${pnh.clock.resync-interval:60s}")
+    public void scheduledResync() {
+        if (properties.overrideEnabled()) {
+            subscribe();
+            resync();
+        }
+    }
+
+    void resync() {
+        try {
+            Object stored = redisson.getBucket(properties.redisKey(), StringCodec.INSTANCE)
+                    .get();
+            availability.markSuccess();
+            if (stored != null) {
+                apply(json.readValue(stored.toString(), StoredState.class));
+            } else if (applied != null && ClockMode.valueOf(applied.mode()) != ClockMode.SYSTEM) {
+                apply(new StoredState(ClockMode.SYSTEM.name(), null, null, "resync", clock.realInstant()));
+            }
+        } catch (RuntimeException e) {
+            availability.markFailure(e);
+            log.warn("Clock override state not loaded (Redis unavailable); keeping mode {}", clock.mode());
         }
     }
 

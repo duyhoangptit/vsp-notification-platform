@@ -82,9 +82,12 @@ Signals: `GET /actuator/health` shows component `redisAvailability: DEGRADED` (H
 
 ## System time override (non-production only, R29)
 
-`pnh.clock.override-enabled=true` (never with profile `prod` — startup fails) exposes
-`GET/PUT/DELETE /console/api/admin/clock` (ADMIN; console → System time). The override is stored in Redis and applied on
-all instances within ~1 s; partitions for the target month (+3) are created first or the override is rejected (422).
+`pnh.clock.override-enabled=true` (never with profile `prod` — startup fails) makes the hub follow the **VSP system
+clock managed by vsp-catalog-service** (`PUT/DELETE /api/v1/admin/system-clock`, history in its database). Catalog
+publishes the state on Redis key `vsp:clock:override` (absent = SYSTEM) and topic `vsp:clock` — the hub must use the
+**same Redis**. Every instance applies it within ~1 s and re-reads the key every `pnh.clock.resync-interval` (60 s);
+partitions for the target month (+3) are created first, otherwise the change is ignored and logged.
+`GET /console/api/admin/clock` (console → System time) is read-only.
 Kafka timestamps, Redis TTLs, Resilience4j windows and scheduler triggers keep real time by design.
 
 ## Observability
@@ -110,3 +113,24 @@ for `DOWN` / `OUT_OF_SERVICE`. Readiness/liveness groups: `/actuator/health/read
   resolved by the sweeper (never re-sent).
 - PostgreSQL `max_connections` must cover every replica's pool plus the provisioning CLI (pool of 2) and migrations:
   e.g. 4 replicas × 50 + 10. The local compose stack sets `max_connections=200`.
+
+## Console access via identity SSO (vsp-frontend Platform Console)
+
+The operator screens now live in **vsp-frontend** (Platform Console → Notification). Set `PNH_JWKS_URI` (identity
+staff realm JWKS, e.g. `http://identity:8080/t/ticket-staff/.well-known/jwks.json`, optional `PNH_JWT_ISSUER`) and
+the console API accepts identity staff JWTs (`Authorization: Bearer`, no CSRF). Every endpoint checks an identity
+permission of the `notification` application:
+
+| Endpoint | Read | Write |
+|---|---|---|
+| `/console/api/dashboard/**` | `notification.dashboard.view` | |
+| `/console/api/templates/**` | `notification.template.view` | `notification.template.manage` |
+| `/console/api/notifications/**` | `notification.message.view` | |
+| `/console/api/channel-configs/**` | `notification.channel.view` | `notification.channel.manage` |
+| `/console/api/alerts/**` | `notification.alert.manage` or `notification.audit.view` | `notification.alert.manage` |
+| `/console/api/config-change-log` | `notification.audit.view` | |
+
+`ConsoleAuthorizationArchTest` fails the build if a console handler has no `@PreAuthorize`. The legacy local operator
+login still works during the transition; operator roles map to the same permissions (ADMIN = all,
+TEMPLATE_EDITOR = NOTIFICATION_TEMPLATE_EDITOR, SUPPORT_VIEWER = NOTIFICATION_SUPPORT; note SUPPORT_VIEWER can now read
+templates). `frontend/` here is deprecated and will be removed once the Platform Console module is the only console.

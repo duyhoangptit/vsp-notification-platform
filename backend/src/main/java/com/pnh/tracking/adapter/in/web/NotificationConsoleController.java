@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** Delivery Audit API (US8) — ADMIN and SUPPORT_VIEWER. */
 @RestController
 @RequestMapping("/console/api/notifications")
-@PreAuthorize("hasAnyRole('ADMIN','SUPPORT_VIEWER')")
 class NotificationConsoleController {
 
     private final NotificationSearchService service;
@@ -23,6 +22,7 @@ class NotificationConsoleController {
         this.service = service;
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.message.view')")
     @GetMapping
     NotificationSearchService.Page search(
             @RequestParam(name = "client_request_id", required = false) String clientRequestId,
@@ -39,6 +39,7 @@ class NotificationConsoleController {
                 clientRequestId, userId, recipientTarget, channelType, status, clientId, from, to, page, size));
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.message.view')")
     @GetMapping("/{id}")
     NotificationSearchService.Detail detail(@PathVariable UUID id) {
         return service.detail(id);

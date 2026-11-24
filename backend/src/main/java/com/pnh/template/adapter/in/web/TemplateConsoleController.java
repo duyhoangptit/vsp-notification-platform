@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** {@code /console/api/templates*} — ADMIN and TEMPLATE_EDITOR (T135). */
 @RestController
 @RequestMapping("/console/api/templates")
-@PreAuthorize("hasAnyRole('ADMIN','TEMPLATE_EDITOR')")
 class TemplateConsoleController {
 
     record PreviewRequest(
@@ -42,6 +41,7 @@ class TemplateConsoleController {
         this.previews = previews;
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.view')")
     @GetMapping
     TemplateCommandService.PageResult list(
             @RequestParam(required = false) String q,
@@ -52,32 +52,38 @@ class TemplateConsoleController {
         return commands.list(q, channelType, status, page, size);
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.manage')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     TemplateView create(@Valid @RequestBody TemplateCreateInput input) {
         return commands.create(input.toInput());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.view')")
     @GetMapping("/{code}")
     TemplateView get(@PathVariable String code) {
         return commands.get(code);
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.manage')")
     @PutMapping("/{code}")
     TemplateView update(@PathVariable String code, @Valid @RequestBody TemplateInput input) {
         return commands.update(code, input);
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.manage')")
     @DeleteMapping("/{code}")
     TemplateView deactivate(@PathVariable String code, @RequestParam long version) {
         return commands.setActive(code, version, false);
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.manage')")
     @PostMapping("/{code}/activate")
     TemplateView activate(@PathVariable String code, @RequestParam long version) {
         return commands.setActive(code, version, true);
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.template.manage')")
     @PostMapping("/preview")
     TemplatePreviewService.Preview preview(@Valid @RequestBody PreviewRequest req) {
         return previews.preview(

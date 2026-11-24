@@ -129,6 +129,12 @@ management:
         enabled: ${PNH_OTLP_TRACES_ENABLED:false}
 
 pnh:
+  security:
+    jwt:
+      # identity-service staff realm JWKS; set to let the vsp-frontend Platform Console call /console/api with SSO
+      # bearer tokens (blank = legacy operator login only)
+      jwk-set-uri: ${PNH_JWKS_URI:}
+      issuer: ${PNH_JWT_ISSUER:}
   jobs:
     enabled: true
   redis:
@@ -140,7 +146,11 @@ pnh:
     master-key-id: ${PNH_MASTER_KEY_ID:k1}
   clock:
     mode: system
+    # true = follow the VSP system clock managed by vsp-catalog-service (non-production only; same Redis instance)
     override-enabled: ${PNH_CLOCK_OVERRIDE_ENABLE:false}
+    redis-key: vsp:clock:override
+    topic: vsp:clock
+    resync-interval: 60s
   delivery:
     stuck-timeout: 5m
     processing-timeout: 15m

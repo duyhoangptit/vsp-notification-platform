@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** Operations dashboard (US9) — every role. */
 @RestController
 @RequestMapping("/console/api/dashboard")
-@PreAuthorize("hasAnyRole('ADMIN','TEMPLATE_EDITOR','SUPPORT_VIEWER')")
 class DashboardController {
 
     private final DashboardService service;
@@ -22,6 +21,7 @@ class DashboardController {
         this.service = service;
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.dashboard.view')")
     @GetMapping("/volume")
     DashboardService.Volume volume(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
@@ -31,6 +31,7 @@ class DashboardController {
         return service.volume(from, to, granularity, clientId);
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.dashboard.view')")
     @GetMapping("/channel-rates")
     List<DashboardService.ChannelRate> rates(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,

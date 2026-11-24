@@ -31,7 +31,7 @@ push main ──► ci (test backend/frontend, dependency scan)
 ```bash
 # User deploy (đã có docker + compose v2.20+), thuộc group docker
 sudo adduser --disabled-password deploy && sudo usermod -aG docker deploy
-# Thư mục deploy nằm trong folder vinspeed (cạnh compose.yml của hạ tầng), ví dụ /home/deploy/vinspeed/pnp
+# Thư mục deploy nằm trong folder vinspeed (cạnh compose.yml của hạ tầng — trên máy dev nằm ở vinspeed/devops/), ví dụ /home/deploy/vinspeed/pnp
 # → đặt đúng đường dẫn tuyệt đối này vào GitHub variable DEPLOY_DIR
 mkdir -p <vinspeed>/pnp   # user deploy phải có quyền ghi
 
@@ -83,7 +83,7 @@ server {
 `/actuator` không được public; Prometheus (`vinspeed-prometheus`) scrape được qua network chung:
 
 ```yaml
-# vinspeed/docker/prometheus/prometheus.yml
+# vinspeed/devops/docker/prometheus/prometheus.yml (trên VPS: /opt/vinspeed/docker/prometheus/prometheus.yml)
   - job_name: pnh
     metrics_path: /actuator/prometheus
     static_configs: [{ targets: ['pnh-backend-1:8080'] }]

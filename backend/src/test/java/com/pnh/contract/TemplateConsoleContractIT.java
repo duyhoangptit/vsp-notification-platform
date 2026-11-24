@@ -83,9 +83,16 @@ class TemplateConsoleContractIT extends IntegrationTestBase {
     }
 
     @Test
-    void supportViewerForbidden() throws Exception {
+    void supportViewerReadsTemplatesButCannotWrite() throws Exception {
+        // identity role NOTIFICATION_SUPPORT has notification.template.view but not template.manage
         ConsoleSession s = ConsoleSession.login(mvc, data, "SUPPORT_VIEWER");
-        MvcResult r = s.perform(get("/console/api/templates"));
+        assertThat(s.perform(get("/console/api/templates")).getResponse().getStatus())
+                .isEqualTo(200);
+        MvcResult r = s.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/console/api/templates")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"template_code\":\"SUPPORT_NOPE\",\"template_name\":\"x\",\"channel_type\":\"SMS\","
+                                + "\"category\":\"STANDARD\",\"body_template\":\"x\"}"));
         assertThat(r.getResponse().getStatus()).isEqualTo(403);
         assertThat(r.getResponse().getContentAsString()).contains("FORBIDDEN");
     }

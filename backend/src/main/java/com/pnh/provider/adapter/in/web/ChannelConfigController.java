@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** {@code /console/api/channel-configs*} — ADMIN only (T171). Secrets are write-only. */
 @RestController
 @RequestMapping("/console/api/channel-configs")
-@PreAuthorize("hasRole('ADMIN')")
 class ChannelConfigController {
 
     /** {@code POST}: ChannelConfigInput without {@code version} (update-only, see {@link ConfigInput}). */
@@ -67,22 +66,26 @@ class ChannelConfigController {
         this.service = service;
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.channel.view')")
     @GetMapping
     List<ChannelConfigCommandService.ConfigView> list() {
         return service.list();
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.channel.manage')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     ChannelConfigCommandService.ConfigView create(@Valid @RequestBody ConfigCreateInput body) {
         return service.create(body.toInput());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.channel.manage')")
     @PutMapping("/{id}")
     ChannelConfigCommandService.ConfigView update(@PathVariable long id, @Valid @RequestBody ConfigInput body) {
         return service.update(id, body.toInput());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.channel.manage')")
     @PostMapping("/{id}/test")
     ChannelConfigCommandService.TestOutcome test(@PathVariable long id) {
         return service.test(id);

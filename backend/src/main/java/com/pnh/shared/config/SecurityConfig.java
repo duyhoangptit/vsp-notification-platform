@@ -7,9 +7,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -23,6 +28,13 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -91,18 +103,37 @@ public class SecurityConfig {
                 .build();
     }
 
+    /**
+     * Operator console. Two ways in, one permission model ({@code notification.*}, see NotificationPermissions):
+     * <ul>
+     *   <li>identity-service staff JWT ({@code Authorization: Bearer}, claim {@code perms}) — vsp-frontend Platform
+     *       Console; stateless, no CSRF (the token is not sent automatically by the browser). Enabled when
+     *       {@code pnh.security.jwt.jwk-set-uri} is set.
+     *   <li>legacy local operator login (session cookie + CSRF); the operator role maps to the same permissions.
+     * </ul>
+     */
     @Bean
     @Order(3)
-    SecurityFilterChain consoleChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain consoleChain(HttpSecurity http, ObjectProvider<JwtDecoder> jwtDecoder) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookiePath("/");
+        JwtDecoder decoder = jwtDecoder.getIfAvailable();
+        if (decoder != null) {
+            http.oauth2ResourceServer(
+                    o -> o.jwt(j -> j.decoder(decoder).jwtAuthenticationConverter(staffJwtConverter()))
+                            .authenticationEntryPoint((req, res, ex) ->
+                                    reject(req, res, ex, ErrorCode.UNAUTHORIZED, 401, "Sign in required")));
+        }
         return http.securityMatcher("/console/api/**")
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.POST, "/console/api/auth/login")
                         .permitAll()
                         .anyRequest()
                         .authenticated())
-                .csrf(c ->
-                        c.spa().csrfTokenRepository(csrfRepository).ignoringRequestMatchers("/console/api/auth/login"))
+                .csrf(c -> c.spa()
+                        .csrfTokenRepository(csrfRepository)
+                        .ignoringRequestMatchers(
+                                request -> "/console/api/auth/login".equals(request.getRequestURI()),
+                                SecurityConfig::isBearerRequest))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .exceptionHandling(e -> e.authenticationEntryPoint(
                                 (req, res, ex) -> reject(req, res, ex, ErrorCode.UNAUTHORIZED, 401, "Sign in required"))
@@ -113,6 +144,41 @@ public class SecurityConfig {
                 .httpBasic(b -> b.disable())
                 .logout(l -> l.disable())
                 .build();
+    }
+
+    static boolean isBearerRequest(HttpServletRequest request) {
+        String h = request.getHeader("Authorization");
+        return h != null && h.regionMatches(true, 0, "Bearer ", 0, 7);
+    }
+
+    /** identity staff token: every {@code perms} entry is an authority; principal name = preferred_username. */
+    static JwtAuthenticationConverter staffJwtConverter() {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            List<String> perms = jwt.getClaimAsStringList("perms");
+            return perms == null
+                    ? List.of()
+                    : perms.stream()
+                            .<GrantedAuthority>map(SimpleGrantedAuthority::new)
+                            .toList();
+        });
+        converter.setPrincipalClaimName("preferred_username");
+        return converter;
+    }
+
+    /** JWKS of the identity-service staff realm; absent = console accepts only the legacy operator login. */
+    @Bean
+    @ConditionalOnExpression("!'${pnh.security.jwt.jwk-set-uri:}'.isBlank()")
+    @ConditionalOnMissingBean(JwtDecoder.class)
+    JwtDecoder staffJwtDecoder(
+            @Value("${pnh.security.jwt.jwk-set-uri}") String jwkSetUri,
+            @Value("${pnh.security.jwt.issuer:}") String issuer) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+                .jwsAlgorithm(SignatureAlgorithm.ES256)
+                .build();
+        decoder.setJwtValidator(
+                issuer.isBlank() ? JwtValidators.createDefault() : JwtValidators.createDefaultWithIssuer(issuer));
+        return decoder;
     }
 
     /** Actuator (health, prometheus only exposed) and the bundled SPA. */

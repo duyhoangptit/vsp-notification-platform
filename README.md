@@ -13,7 +13,7 @@ back on Kafka, an in-app Push inbox, incident alerts and an operator console.
 | Path | Content |
 |------|---------|
 | `backend/` | Spring Boot 4.1 / Java 21 / Spring Modulith service — Maven (`./mvnw verify`) |
-| `frontend/` | Operator console — React 19, Mantine 8, TanStack Query (`pnpm dev`, `pnpm test`, `pnpm e2e`) |
+| `frontend/` | **Deprecated** operator console (local login). The screens moved to vsp-frontend Platform Console → Notification (identity SSO); see docs/operations.md |
 | `deploy/local/` | Docker Compose stack (Postgres 16, Kafka KRaft, Redis 7, Mailpit, WireMock), k6 load test, helper scripts |
 | `.github/workflows/` | CI (`ci.yml`) and nightly SLO/load suite (`performance.yml`) |
 

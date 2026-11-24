@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -15,9 +14,9 @@ import com.pnh.PnhApplication;
 import com.pnh.admin.adapter.out.OperatorRepository;
 import com.pnh.admin.domain.Operator;
 import com.pnh.admin.domain.OperatorRole;
-import com.pnh.contract.ContractSupport;
 import com.pnh.shared.domain.NotificationIdGenerator;
 import com.pnh.shared.time.ClockMode;
+import com.pnh.shared.time.ClockOverrideService;
 import com.pnh.shared.time.PnhClock;
 import com.pnh.support.IntegrationTestBase;
 import com.pnh.support.NotificationFixtures;
@@ -31,6 +30,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RedissonClient;
+import org.redisson.client.codec.StringCodec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -41,8 +42,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
 
-/** T031 */
+/**
+ * T031 — the system clock is owned by vsp-catalog-service, which publishes it on Redis key {@code vsp:clock:override}
+ * and topic {@code vsp:clock}. These tests play the catalog's role by publishing the contract JSON directly.
+ */
 class ClockOverrideIT extends IntegrationTestBase {
+
+    static final String KEY = "vsp:clock:override";
+    static final String TOPIC = "vsp:clock";
 
     static ConfigurableApplicationContext replica;
     static ConfigurableApplicationContext disabled;
@@ -59,6 +66,12 @@ class ClockOverrideIT extends IntegrationTestBase {
     @Autowired
     NotificationIdGenerator ids;
 
+    @Autowired
+    RedissonClient redisson;
+
+    @Autowired
+    ClockOverrideService clockService;
+
     @BeforeAll
     static void startReplicas() {
         replica = SecondaryContext.start();
@@ -71,13 +84,24 @@ class ClockOverrideIT extends IntegrationTestBase {
         disabled.close();
     }
 
+    /** What vsp-catalog-service does on PUT /api/v1/admin/system-clock. */
+    private void catalogPublishes(String mode, String fixedInstant, String offset) {
+        String payload = "{\"mode\":\"" + mode + "\""
+                + (fixedInstant == null ? "" : ",\"fixed_instant\":\"" + fixedInstant + "\"")
+                + (offset == null ? "" : ",\"offset\":\"" + offset + "\"")
+                + ",\"changed_by\":\"catalog-admin\",\"changed_at\":\"" + clock.realInstant() + "\"}";
+        if ("SYSTEM".equals(mode)) {
+            redisson.getBucket(KEY, StringCodec.INSTANCE).delete();
+        } else {
+            redisson.getBucket(KEY, StringCodec.INSTANCE).set(payload);
+        }
+        redisson.getTopic(TOPIC, StringCodec.INSTANCE).publish(payload);
+    }
+
     @AfterEach
-    void resetViaApi() throws Exception {
-        Session admin = login(mvc, "ADMIN");
-        mvc.perform(delete("/console/api/admin/clock")
-                .cookie(admin.session)
-                .cookie(admin.xsrf)
-                .header("X-XSRF-TOKEN", admin.xsrf.getValue()));
+    void resetViaCatalog() {
+        catalogPublishes("SYSTEM", null, null);
+        await().atMost(Duration.ofSeconds(2)).until(() -> clock.mode() == ClockMode.SYSTEM);
     }
 
     record Session(Cookie session, Cookie xsrf) {}
@@ -99,105 +123,75 @@ class ClockOverrideIT extends IntegrationTestBase {
 
     private static MockMvc mvcOf(ConfigurableApplicationContext ctx) {
         return MockMvcBuilders.webAppContextSetup((WebApplicationContext) ctx)
-                // sessions live in PostgreSQL: the Spring Session filter must run before security, as in the server
                 .addFilters(ctx.getBean("springSessionRepositoryFilter", jakarta.servlet.Filter.class))
                 .apply(springSecurity())
                 .build();
     }
 
     @Test
-    void disabledOverrideIs404() throws Exception {
-        MockMvc off = mvcOf(disabled);
-        Session admin = login(off, "ADMIN");
-        off.perform(put("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"OFFSET\",\"offset\":\"P1D\"}"))
-                .andExpect(status().isNotFound());
-        off.perform(delete("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue()))
-                .andExpect(status().isNotFound());
-    }
+    void publishedOverrideReachesEveryInstanceAndDrivesJpaAuditing() throws Exception {
+        catalogPublishes("FIXED", "2027-01-01T08:00:00Z", null);
 
-    @Test
-    void adminOverridePropagatesAuditsAndDrivesJpaAuditing() throws Exception {
-        Session admin = login(mvc, "ADMIN");
-        MvcResult res = mvc.perform(put("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"FIXED\",\"fixed_instant\":\"2027-01-01T08:00:00Z\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.mode").value("FIXED"))
-                .andExpect(jsonPath("$.now").value("2027-01-01T08:00:00Z"))
-                .andReturn();
-        ContractSupport.assertConforms(ContractSupport.CONSOLE_API, res);
-
+        Instant fixed = Instant.parse("2027-01-01T08:00:00Z");
+        await().atMost(Duration.ofSeconds(2)).until(() -> clock.instant().equals(fixed));
         PnhClock remote = replica.getBean(PnhClock.class);
-        await().atMost(Duration.ofSeconds(1))
-                .until(() -> remote.mode() == ClockMode.FIXED
-                        && remote.instant().equals(Instant.parse("2027-01-01T08:00:00Z")));
+        await().atMost(Duration.ofSeconds(2))
+                .until(() ->
+                        remote.mode() == ClockMode.FIXED && remote.instant().equals(fixed));
+        // an instance with override disabled keeps real time
+        assertThat(disabled.getBean(PnhClock.class).mode()).isEqualTo(ClockMode.SYSTEM);
 
         String username = TestDataFactory.unique("clk");
         Operator op = tx.execute(s -> operators.save(new Operator(username, "x", "h", OperatorRole.ADMIN)));
-        assertThat(op.getCreatedAt()).isEqualTo(Instant.parse("2027-01-01T08:00:00Z"));
-        assertThat(op.getUpdatedAt()).isEqualTo(Instant.parse("2027-01-01T08:00:00Z"));
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM pnh_config_audit_log WHERE entity_type='CLOCK_OVERRIDE'", Integer.class))
-                .isPositive();
+        assertThat(op.getCreatedAt()).isEqualTo(fixed);
 
-        mvc.perform(delete("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue()))
+        Session editor = login(mvc, "TEMPLATE_EDITOR");
+        mvc.perform(get("/console/api/admin/clock").cookie(editor.session()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.mode").value("SYSTEM"));
-        await().atMost(Duration.ofSeconds(1)).until(() -> remote.mode() == ClockMode.SYSTEM);
+                .andExpect(jsonPath("$.mode").value("FIXED"))
+                .andExpect(jsonPath("$.now").value("2027-01-01T08:00:00Z"))
+                .andExpect(jsonPath("$.changed_by").value("catalog-admin"));
+
+        catalogPublishes("SYSTEM", null, null);
+        await().atMost(Duration.ofSeconds(2)).until(() -> remote.mode() == ClockMode.SYSTEM);
     }
 
     @Test
-    void nonAdminForbiddenAndInvalidBody422() throws Exception {
-        Session editor = login(mvc, "TEMPLATE_EDITOR");
+    void notificationNoLongerAcceptsWrites() throws Exception {
+        Session admin = login(mvc, "ADMIN");
         mvc.perform(put("/console/api/admin/clock")
-                        .cookie(editor.session)
-                        .cookie(editor.xsrf)
-                        .header("X-XSRF-TOKEN", editor.xsrf.getValue())
+                        .cookie(admin.session())
+                        .cookie(admin.xsrf())
+                        .header("X-XSRF-TOKEN", admin.xsrf().getValue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mode\":\"OFFSET\",\"offset\":\"P1D\"}"))
-                .andExpect(status().isForbidden());
-        mvc.perform(get("/console/api/admin/clock").cookie(editor.session)).andExpect(status().isOk());
-        Session admin = login(mvc, "ADMIN");
-        mvc.perform(put("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"OFFSET\",\"offset\":\"thirty days\"}"))
-                .andExpect(status().isUnprocessableEntity());
-        mvc.perform(put("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"FIXED\"}"))
-                .andExpect(status().isUnprocessableEntity());
+                .andExpect(status().isMethodNotAllowed());
+        MockMvc off = mvcOf(disabled);
+        Session offAdmin = login(off, "ADMIN");
+        off.perform(get("/console/api/admin/clock").cookie(offAdmin.session())).andExpect(status().isNotFound());
     }
 
     @Test
-    void overrideIntoMonthWithoutPartitionCreatesThemFirst() throws Exception {
-        Session admin = login(mvc, "ADMIN");
-        mvc.perform(put("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"FIXED\",\"fixed_instant\":\"2020-01-15T00:00:00Z\"}"))
-                .andExpect(status().isOk());
+    void offsetOverride() {
+        catalogPublishes("OFFSET", null, "P30D");
+        await().atMost(Duration.ofSeconds(2)).until(() -> clock.mode() == ClockMode.OFFSET);
+        assertThat(Duration.between(clock.realInstant(), clock.instant()).toDays())
+                .isEqualTo(30);
+    }
+
+    @Test
+    void resyncCatchesUpWithoutBroadcast() {
+        redisson.getBucket(KEY, StringCodec.INSTANCE)
+                .set("{\"mode\":\"FIXED\",\"fixed_instant\":\"2028-02-29T00:00:00Z\",\"changed_by\":\"x\","
+                        + "\"changed_at\":\"2026-11-23T00:00:00Z\"}");
+        clockService.scheduledResync();
+        assertThat(clock.instant()).isEqualTo(Instant.parse("2028-02-29T00:00:00Z"));
+    }
+
+    @Test
+    void overrideIntoMonthWithoutPartitionCreatesThemFirst() {
+        catalogPublishes("FIXED", "2020-01-15T00:00:00Z", null);
+        await().atMost(Duration.ofSeconds(2)).until(() -> clock.mode() == ClockMode.FIXED);
         for (String m : new String[] {"2020m01", "2020m02", "2020m03", "2020m04"}) {
             assertThat(jdbc.queryForObject(
                             "SELECT to_regclass('pnh_notifications_history_y" + m + "') IS NOT NULL", Boolean.class))
@@ -212,19 +206,14 @@ class ClockOverrideIT extends IntegrationTestBase {
     }
 
     @Test
-    void partitionCreationFailureRejectsOverride() throws Exception {
+    void partitionCreationFailureIgnoresOverride() throws Exception {
         // an overlapping manual partition makes creating 2019-06 impossible
         jdbc.execute("CREATE TABLE IF NOT EXISTS pnh_hist_overlap PARTITION OF pnh_notifications_history "
                 + "FOR VALUES FROM ('2019-06-15') TO ('2019-07-15')");
-        Session admin = login(mvc, "ADMIN");
         Instant before = clock.instant();
-        mvc.perform(put("/console/api/admin/clock")
-                        .cookie(admin.session)
-                        .cookie(admin.xsrf)
-                        .header("X-XSRF-TOKEN", admin.xsrf.getValue())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"FIXED\",\"fixed_instant\":\"2019-06-20T00:00:00Z\"}"))
-                .andExpect(status().isUnprocessableEntity());
+        catalogPublishes("FIXED", "2019-06-20T00:00:00Z", null);
+        clockService.scheduledResync(); // synchronous path: must not switch either
+        Thread.sleep(300);
         assertThat(clock.mode()).isEqualTo(ClockMode.SYSTEM);
         assertThat(clock.instant()).isAfterOrEqualTo(before);
     }

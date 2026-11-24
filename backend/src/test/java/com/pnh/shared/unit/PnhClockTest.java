@@ -91,23 +91,23 @@ class PnhClockTest {
 
     @Test
     void propertiesValidation() {
-        assertThatThrownBy(() -> new ClockProperties(ClockMode.FIXED, null, null, true).validate())
+        assertThatThrownBy(() -> new ClockProperties(ClockMode.FIXED, null, null, true, null, null).validate())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("fixed-instant");
-        assertThatThrownBy(() -> new ClockProperties(ClockMode.OFFSET, null, null, true).validate())
+        assertThatThrownBy(() -> new ClockProperties(ClockMode.OFFSET, null, null, true, null, null).validate())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("offset");
-        assertThatThrownBy(() -> new ClockProperties(ClockMode.OFFSET, null, "30 days", true).validate())
+        assertThatThrownBy(() -> new ClockProperties(ClockMode.OFFSET, null, "30 days", true, null, null).validate())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ISO-8601");
-        new ClockProperties(ClockMode.OFFSET, null, "-PT2H", true).validate();
-        new ClockProperties(ClockMode.FIXED, Instant.EPOCH, null, true).validate();
-        new ClockProperties(null, null, null, false).validate();
+        new ClockProperties(ClockMode.OFFSET, null, "-PT2H", true, null, null).validate();
+        new ClockProperties(ClockMode.FIXED, Instant.EPOCH, null, true, null, null).validate();
+        new ClockProperties(null, null, null, false, null, null).validate();
     }
 
     @Test
     void applyPropertiesSetsMode() {
-        clock.apply(new ClockProperties(ClockMode.OFFSET, null, "P1D", false));
+        clock.apply(new ClockProperties(ClockMode.OFFSET, null, "P1D", false, null, null));
         assertThat(clock.instant()).isEqualTo(BASE.plus(Duration.ofDays(1)));
     }
 }

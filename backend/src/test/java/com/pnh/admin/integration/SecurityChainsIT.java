@@ -2,7 +2,6 @@ package com.pnh.admin.integration;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,15 +55,15 @@ class SecurityChainsIT extends IntegrationTestBase {
         mvc.perform(get("/console/api/auth/me")).andExpect(status().isUnauthorized());
 
         Cookie support = login("SUPPORT_VIEWER");
-        // wrong role → 403 FORBIDDEN (ADMIN-only clock override)
+        // wrong role → 403 FORBIDDEN (ADMIN-only alert recipients)
         var probe = mvc.perform(get("/console/api/auth/me").cookie(support)).andReturn();
         var xsrf = probe.getResponse().getCookie("XSRF-TOKEN");
-        mvc.perform(put("/console/api/admin/clock")
+        mvc.perform(post("/console/api/alerts/recipients")
                         .cookie(support)
                         .cookie(xsrf)
                         .header("X-XSRF-TOKEN", xsrf.getValue())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"mode\":\"OFFSET\",\"offset\":\"P1D\"}"))
+                        .content("{\"email\":\"probe@example.com\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 

@@ -262,9 +262,9 @@ export interface paths {
         };
         /** @description Current system time and mode (all roles may read so the console can show the override banner). */
         get: operations["getClock"];
-        put: operations["overrideClock"];
+        put?: never;
         post?: never;
-        delete: operations["resetClock"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1135,63 +1135,6 @@ export interface operations {
                     "application/json": components["schemas"]["ClockState"];
                 };
             };
-        };
-    };
-    overrideClock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    mode: "FIXED" | "OFFSET";
-                    /**
-                     * Format: date-time
-                     * @description Required for FIXED
-                     */
-                    fixed_instant?: string;
-                    /** @description ISO-8601 duration, required for OFFSET, e.g. P30D or -PT2H */
-                    offset?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Applied to all instances */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClockState"];
-                };
-            };
-            404: components["responses"]["Problem"];
-            422: components["responses"]["Problem"];
-        };
-    };
-    resetClock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Back to SYSTEM */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClockState"];
-                };
-            };
-            404: components["responses"]["Problem"];
         };
     };
     listAlertRecipients: {

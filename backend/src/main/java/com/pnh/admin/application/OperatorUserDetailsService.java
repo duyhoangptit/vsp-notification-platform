@@ -22,7 +22,12 @@ public class OperatorUserDetailsService implements UserDetailsService {
         Operator op = operators.findById(username).orElseThrow(() -> new UsernameNotFoundException("unknown"));
         return User.withUsername(op.getUsername())
                 .password(op.getPasswordHash())
-                .roles(op.getRole().name())
+                // ROLE_x for the legacy UI + the identity permissions of that role (what the endpoints check)
+                .authorities(java.util.stream.Stream.concat(
+                                java.util.stream.Stream.of(
+                                        "ROLE_" + op.getRole().name()),
+                                op.getRole().permissions().stream())
+                        .toArray(String[]::new))
                 .disabled(!op.isActive())
                 .build();
     }

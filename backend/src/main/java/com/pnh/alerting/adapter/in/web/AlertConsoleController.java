@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** {@code /console/api/alerts/*} — ADMIN only (T154). */
 @RestController
 @RequestMapping("/console/api/alerts")
-@PreAuthorize("hasRole('ADMIN')")
 class AlertConsoleController {
 
     record NewRecipient(
@@ -60,28 +59,33 @@ class AlertConsoleController {
         this.mailer = mailer;
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage','notification.audit.view')")
     @GetMapping("/recipients")
     List<AlertSettingsService.RecipientView> recipients() {
         return settings.recipients();
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage')")
     @PostMapping("/recipients")
     @ResponseStatus(HttpStatus.CREATED)
     AlertSettingsService.RecipientView add(@Valid @RequestBody NewRecipient body) {
         return settings.addRecipient(body.email(), body.displayName());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage')")
     @PutMapping("/recipients/{id}")
     AlertSettingsService.RecipientView update(@PathVariable long id, @Valid @RequestBody RecipientUpdate body) {
         return settings.updateRecipient(id, body.displayName(), body.isActive(), body.version());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage')")
     @DeleteMapping("/recipients/{id}")
     ResponseEntity<Void> remove(@PathVariable long id, @RequestParam long version) {
         settings.removeRecipient(id, version);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage')")
     @PostMapping("/recipients/test")
     TestResult test() {
         AlertMailer.Result r = mailer.send(
@@ -90,11 +94,13 @@ class AlertConsoleController {
         return new TestResult(r.status().name(), r.error());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage','notification.audit.view')")
     @GetMapping("/rules")
     List<AlertSettingsService.RuleView> rules() {
         return settings.rules();
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage')")
     @PutMapping("/rules/{ruleCode}")
     AlertSettingsService.RuleView updateRule(@PathVariable String ruleCode, @Valid @RequestBody RuleUpdate body) {
         return settings.updateRule(
@@ -107,6 +113,7 @@ class AlertConsoleController {
                 body.version());
     }
 
+    @PreAuthorize("hasAnyAuthority('notification.alert.manage','notification.audit.view')")
     @GetMapping("/events")
     AlertEventRepository.Page events(
             @RequestParam(name = "rule_code", required = false) String ruleCode,

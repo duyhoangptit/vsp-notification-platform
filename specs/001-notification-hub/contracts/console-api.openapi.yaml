@@ -319,7 +319,10 @@ paths:
                   total: { type: integer }
 
   /console/api/admin/clock:
-    description: Non-production only (pnh.clock.override-enabled=true); returns 404 when disabled. ADMIN only.
+    description: >
+      Non-production only (pnh.clock.override-enabled=true); returns 404 when disabled. Read-only: the override is
+      managed centrally by vsp-catalog-service (PUT/DELETE /api/v1/admin/system-clock) and followed via Redis
+      (key vsp:clock:override, topic vsp:clock).
     get:
       operationId: getClock
       x-roles: [ADMIN, TEMPLATE_EDITOR, SUPPORT_VIEWER]
@@ -327,30 +330,6 @@ paths:
       security: [ { session: [] } ]
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ClockState' } } } }
-    put:
-      operationId: overrideClock
-      x-roles: [ADMIN]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode]
-              properties:
-                mode: { type: string, enum: [FIXED, OFFSET] }
-                fixed_instant: { type: string, format: date-time, description: Required for FIXED }
-                offset: { type: string, description: 'ISO-8601 duration, required for OFFSET, e.g. P30D or -PT2H' }
-      responses:
-        '200': { description: Applied to all instances, content: { application/json: { schema: { $ref: '#/components/schemas/ClockState' } } } }
-        '404': { $ref: '#/components/responses/Problem' }
-        '422': { $ref: '#/components/responses/Problem' }
-    delete:
-      operationId: resetClock
-      x-roles: [ADMIN]
-      responses:
-        '200': { description: Back to SYSTEM, content: { application/json: { schema: { $ref: '#/components/schemas/ClockState' } } } }
-        '404': { $ref: '#/components/responses/Problem' }
 
   /console/api/alerts/recipients:
     get:
