@@ -253,3 +253,10 @@ docker compose logs -f backend
 ./deploy.sh <sha>                 # deploy/rollback thủ công (cần docker login ghcr.io nếu package private)
 docker compose run --rm backend --spring.profiles.active=cli <command>   # provisioning CLI
 ```
+
+- Log backend ra stdout dạng JSON (format logstash: `@timestamp`, `level`, `logger_name`, `message` đã che dữ liệu
+  nhạy cảm, MDC `notification_id`/`client_request_id`/`client_id`/`traceId`/`spanId`) vì image bật profile `container`
+  (`ENV SPRING_PROFILES_INCLUDE=container` trong `backend/Dockerfile`, cộng thêm vào `SPRING_PROFILES_ACTIVE`);
+  Grafana Alloy thu từ log driver `json-file` và đẩy lên Loki. Chạy từ IDE/test (không có `container`) thì log text.
+- Deploy lại chỉ service này trong stack local (`devops/compose.local.yaml`, service `notification`):
+  `./deploy/local/redeploy.sh`.
