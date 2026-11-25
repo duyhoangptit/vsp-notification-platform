@@ -1,13 +1,11 @@
 name: deploy
 
-# Auto: after the `ci` workflow passes on main → build images → deploy to the VPS.
+# Auto: push to `sit` (merging a PR into sit) → ci (reusable ci.yml) → build image → deploy to the VPS.
 # Manual: Actions → deploy → Run workflow (leave `tag` empty to build+deploy the selected
 #         branch, or set `tag` to an existing image tag / git SHA to roll back without building).
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [main]
+  push:
+    branches: [sit]
   workflow_dispatch:
     inputs:
       tag:
@@ -27,8 +25,15 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # Test gate for auto deploys: the same checks as ci.yml (workflow_call). Skipped for manual runs.
+  ci:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   prepare:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: ci
+    if: always() && (needs.ci.result == 'success' || (github.event_name == 'workflow_dispatch' && needs.ci.result == 'skipped'))
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.vars.outputs.sha }}
@@ -38,10 +43,9 @@ jobs:
     steps:
       - id: vars
         env:
-          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           INPUT_TAG: ${{ inputs.tag }}
         run: |
-          sha="${RUN_SHA:-$GITHUB_SHA}"
+          sha="$GITHUB_SHA"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           if [[ -n "$INPUT_TAG" ]]; then

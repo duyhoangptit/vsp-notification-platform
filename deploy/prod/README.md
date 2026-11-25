@@ -3,7 +3,7 @@
 ## Luồng CI/CD
 
 ```
-push main ──► ci (test backend/frontend, dependency scan)
+push / merge PR vào sit ──► ci (test backend/frontend, dependency scan)
                  │ success
                  ▼
              deploy: build 2 image ──► push GHCR ──► SSH vào VPS ──► deploy.sh <git-sha>
@@ -25,6 +25,8 @@ push main ──► ci (test backend/frontend, dependency scan)
 
   Frontend chỉ nằm trong network riêng `pnh-internal` (gọi backend qua alias `pnh-backend`) nên không đụng tên với app khác trên network chung.
 - Rollback thủ công: Actions → **deploy** → *Run workflow* → nhập `tag` = SHA cũ (không build lại).
+
+- **Nhánh `sit`:** chỉ push / merge vào `sit` mới deploy. `deploy.yml` chạy lại `ci.yml` (workflow_call) làm gate rồi mới build + deploy; `ci.yml` vẫn chạy cho nhánh mặc định và mọi PR (không deploy).
 
 ## 1. Chuẩn bị VPS (làm một lần)
 

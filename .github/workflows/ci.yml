@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # reused by deploy.yml as the test gate before deploying sit
+  workflow_call:
 
 env:
   # TẠM THỜI bỏ qua test backend (unit + integration + coverage gate). Đổi thành 'false' để bật lại.
