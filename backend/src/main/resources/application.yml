@@ -81,12 +81,6 @@ server:
         http-only: true
         same-site: lax
 
-logging:
-  structured:
-    json:
-      # masks "message" of the JSON logs (profile container, logback-spring.xml) like %maskedMsg does for text
-      customizer: com.pnh.shared.logging.MaskingJsonMembersCustomizer
-
 management:
   health:
     mail:
