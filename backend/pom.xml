@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.pnh</groupId>
+    <groupId>com.vsp</groupId>
     <artifactId>pnh</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <name>Project Notification Hub</name>
@@ -285,8 +285,8 @@
                                 <rule>
                                     <element>PACKAGE</element>
                                     <includes>
-                                        <include>com.pnh.*.domain*</include>
-                                        <include>com.pnh.*.application*</include>
+                                        <include>com.vsp.notification.*.domain*</include>
+                                        <include>com.vsp.notification.*.application*</include>
                                     </includes>
                                     <limits>
                                         <limit>

@@ -23,7 +23,7 @@ implementation time" within the stated major line; exact pins are set in the bui
 ## R2. Mapping "pnh-*" modules onto Spring Modulith
 
 - **Decision**: One Spring Boot application; each `pnh-*` module is an application-module package
-  under `com.pnh`: `coreapi`, `template`, `dispatcher`, `provider` (parent: provider SPI + channel
+  under `com.vsp.notification`: `coreapi`, `template`, `dispatcher`, `provider` (parent: provider SPI + channel
   configuration) with nested modules `provider.sms`, `provider.email`, `provider.push`
   (future `provider.zalo`), `tracking`, `inbox`, `admin`, and an OPEN `shared` kernel.
   Every module uses Clean Architecture sub-packages: `domain`, `application` (use cases + ports),
@@ -262,7 +262,7 @@ implementation time" within the stated major line; exact pins are set in the bui
   (`u***@example.com`, `+84*****678`).
 - **Rationale**: FR-030, FR-027, constitution IV.
 
-- **Placement (fix C5)**: `OtpContentProtector` lives in `com.pnh.shared.security` (OPEN module) and is invoked by
+- **Placement (fix C5)**: `OtpContentProtector` lives in `com.vsp.notification.shared.security` (OPEN module) and is invoked by
   coreapi `SubmitNotificationUseCase` right after rendering and **before** `createReceived`, in the acceptance
   transaction. The plaintext OTP is therefore never written to `compiled_content`, `subject`, `title` or logs at any
   time; `SensitiveValues` is registered before any logging in the request. The dispatcher and provider modules only
@@ -477,7 +477,7 @@ implementation time" within the stated major line; exact pins are set in the bui
 - **Retention under override (fix H3)**: `pnh.retention.skip-when-clock-overridden` (default `true`): while the clock
   mode ≠ SYSTEM the retention job logs a warning, records metric `pnh_retention_skipped_total{reason="clock_override"}`
   and deletes nothing; testers who want to exercise retention set it to `false` explicitly.
-- **UUIDv7 time component (fix U4)**: `NotificationId` generation lives in `com.pnh.shared.domain` and takes its
+- **UUIDv7 time component (fix U4)**: `NotificationId` generation lives in `com.vsp.notification.shared.domain` and takes its
   millisecond timestamp from the `Clock` bean (same source as `created_at`), plus a monotonic counter and random
   bits (RFC 9562 method 1), so IDs stay unique and sortable within a clock mode; ordering across an override switch
   follows the overridden time by design.

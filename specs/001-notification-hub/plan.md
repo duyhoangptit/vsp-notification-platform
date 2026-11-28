@@ -110,7 +110,7 @@ specs/001-notification-hub/
 backend/
 ├── pom.xml / mvnw / .mvn/wrapper/          # Maven (surefire: *Test, failsafe: *IT)
 └── src/
-    ├── main/java/com/pnh/
+    ├── main/java/com/vsp/notification/
     │   ├── PnhApplication.java
     │   ├── shared/                 # OPEN kernel: ChannelType, Category, NotificationId, Masking, Problem codes, crypto util,
     │   │                           #   infra: CacheConfig (Caffeine + Redisson invalidation), DistributedLock helper, Redis fallbacks
@@ -130,7 +130,7 @@ backend/
     ├── main/resources/
     │   ├── application.yml, application-local.yml
     │   └── db/migration/           # Flyway V1__… (partitions, audit columns, registry, shedlock)
-    └── test/java/com/pnh/
+    └── test/java/com/vsp/notification/
         ├── architecture/           # Modulith verify + documentation
         ├── <module>/unit|module|integration
         └── contract/               # OpenAPI + Kafka JSON-schema contract tests

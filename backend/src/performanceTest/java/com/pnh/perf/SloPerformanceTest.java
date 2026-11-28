@@ -1,19 +1,19 @@
-package com.pnh.perf;
+package com.vsp.notification.perf;
 
-import static com.pnh.support.SendSupport.json;
-import static com.pnh.support.SendSupport.notificationId;
-import static com.pnh.support.SendSupport.send;
+import static com.vsp.notification.support.SendSupport.json;
+import static com.vsp.notification.support.SendSupport.notificationId;
+import static com.vsp.notification.support.SendSupport.send;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
-import com.pnh.coreapi.IngestRejected;
-import com.pnh.shared.infra.KafkaTopics;
-import com.pnh.support.ConsoleSession;
-import com.pnh.support.MailSupport;
-import com.pnh.support.StubbedProvidersTestBase;
-import com.pnh.support.TestContainers;
-import com.pnh.support.TestDataFactory.ClientCreds;
+import com.vsp.notification.coreapi.IngestRejected;
+import com.vsp.notification.shared.infra.KafkaTopics;
+import com.vsp.notification.support.ConsoleSession;
+import com.vsp.notification.support.MailSupport;
+import com.vsp.notification.support.StubbedProvidersTestBase;
+import com.vsp.notification.support.TestContainers;
+import com.vsp.notification.support.TestDataFactory.ClientCreds;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -145,7 +145,7 @@ class SloPerformanceTest extends StubbedProvidersTestBase {
     @Order(2)
     void sc012_otpLatencyUnderStandardBacklog() throws Exception {
         ClientCreds c = data.client("SEND", 10_000_000, true, "ACTIVE");
-        com.pnh.support.ProviderStubs.WIREMOCK.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
+        com.vsp.notification.support.ProviderStubs.WIREMOCK.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(
                         com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo("/sms/send")).atPriority(1)
                 .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json").withBody("{\"message_id\":\"b\"}").withFixedDelay(300)));
@@ -162,7 +162,7 @@ class SloPerformanceTest extends StubbedProvidersTestBase {
         }
         double p95 = percentile(lat, 95);
         REPORT.put("SC-012", Map.of("backlog", BACKLOG, "otp_count", otps.size(), "p95_accept_to_sending_ms", p95));
-        com.pnh.support.ProviderStubs.reset();
+        com.vsp.notification.support.ProviderStubs.reset();
         assertThat(p95).as("SC-012: OTP accepted→SENDING p95 < 5 s").isLessThan(5000);
     }
 

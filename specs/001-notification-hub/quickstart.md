@@ -212,4 +212,4 @@ With profile `local` (`pnh.clock.override-enabled=true`):
 4. Config Change Log shows `CLOCK_OVERRIDE UPDATE` by `admin`. `DELETE` → back to `SYSTEM`.
 5. Start with `--spring.profiles.active=prod --pnh.clock.override-enabled=true` → startup fails; with prod defaults the
    endpoint returns 404.
-6. `./mvnw test -Dtest=ClockUsageArchTest` passes; adding `LocalDateTime.now()` anywhere in `com.pnh` fails it.
+6. `./mvnw test -Dtest=ClockUsageArchTest` passes; adding `LocalDateTime.now()` anywhere in `com.vsp.notification` fails it.

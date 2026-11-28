@@ -70,7 +70,7 @@ spring:
 logging:
   structured:
     json:
-      customizer: com.pnh.shared.logging.MaskingJsonMembersCustomizer   # masks "message" in container JSON logs
+      customizer: com.vsp.notification.shared.logging.MaskingJsonMembersCustomizer   # masks "message" in container JSON logs
 
 server:
   port: 8080

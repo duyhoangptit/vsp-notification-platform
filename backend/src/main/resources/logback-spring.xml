@@ -11,9 +11,9 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <conversionRule conversionWord="msg" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
-    <conversionRule conversionWord="m" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
-    <conversionRule conversionWord="message" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
+    <conversionRule conversionWord="msg" class="com.vsp.notification.shared.logging.SensitiveDataMaskingConverter"/>
+    <conversionRule conversionWord="m" class="com.vsp.notification.shared.logging.SensitiveDataMaskingConverter"/>
+    <conversionRule conversionWord="message" class="com.vsp.notification.shared.logging.SensitiveDataMaskingConverter"/>
 
     <springProfile name="!container">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

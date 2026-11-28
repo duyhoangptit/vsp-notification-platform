@@ -28,7 +28,7 @@ spring:
 logging:
   level:
     root: WARN
-    com.pnh: INFO
+    com.vsp.notification: INFO
     org.springframework.modulith: WARN
 # /v3/api-docs is generated from the controllers so ApiContractDriftIT can compare it with the contracts
 springdoc:
