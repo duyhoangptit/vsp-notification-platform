@@ -33,7 +33,9 @@ COPY --from=build /extracted/application/ ./
 
 USER pnh
 EXPOSE 8080
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+# container: logback-spring.xml log JSON ra stdout (Alloy -> Loki), message đã che
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError" \
+    SPRING_PROFILES_INCLUDE=container
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
   CMD wget -qO- http://127.0.0.1:8080/actuator/health/readiness >/dev/null || exit 1

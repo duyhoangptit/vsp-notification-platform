@@ -29,7 +29,6 @@
         <libphonenumber.version>9.0.42</libphonenumber.version>
         <owasp-html-sanitizer.version>20261103.2</owasp-html-sanitizer.version>
         <google-auth.version>1.55.0</google-auth.version>
-        <logstash-encoder.version>9.0</logstash-encoder.version>
         <springdoc.version>3.2.0</springdoc.version>
 
         <!-- Security overrides of transitive versions (OWASP dependency-check, CVSS >= 7) -->
@@ -116,7 +115,6 @@
         <dependency><groupId>com.googlecode.owasp-java-html-sanitizer</groupId><artifactId>owasp-java-html-sanitizer</artifactId><version>${owasp-html-sanitizer.version}</version></dependency>
         <!-- FCM HTTP v1 OAuth (credential part of the Firebase Admin SDK; HTTP call done with RestClient so the base URL is overridable) -->
         <dependency><groupId>com.google.auth</groupId><artifactId>google-auth-library-oauth2-http</artifactId><version>${google-auth.version}</version></dependency>
-        <dependency><groupId>net.logstash.logback</groupId><artifactId>logstash-logback-encoder</artifactId><version>${logstash-encoder.version}</version></dependency>
         <!-- Swagger UI serving the hand-written contracts (contract-first; enabled per environment) -->
         <dependency><groupId>org.springdoc</groupId><artifactId>springdoc-openapi-starter-webmvc-ui</artifactId><version>${springdoc.version}</version></dependency>
 

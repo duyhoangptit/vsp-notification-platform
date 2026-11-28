@@ -1,35 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VinSpeed logging standard (devops/standards/README.md):
+  - profile "container" (Dockerfile ENV SPRING_PROFILES_INCLUDE=container): JSON logstash ra stdout cho Alloy -> Loki
+    (field level, logger_name, message, @timestamp, mọi MDC). Spring Boot StructuredLogEncoder, không dùng
+    logstash-logback-encoder.
+  - không có "container" (IDE, test): text.
+  Masking: conversionRule thay msg/m/message cho log text; JSON che qua
+  logging.structured.json.customizer = MaskingJsonMembersCustomizer (application.yml).
+-->
 <configuration>
-    <conversionRule conversionWord="maskedMsg" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProfile name="local">
+    <conversionRule conversionWord="msg" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
+    <conversionRule conversionWord="m" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
+    <conversionRule conversionWord="message" class="com.pnh.shared.logging.SensitiveDataMaskingConverter"/>
+
+    <springProfile name="!container">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} [nid=%X{notification_id:-} crid=%X{client_request_id:-} cid=%X{client_id:-} trace=%X{traceId:-}] - %maskedMsg%n%ex</pattern>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} [nid=%X{notification_id:-} crid=%X{client_request_id:-} cid=%X{client_id:-} trace=%X{traceId:-}] - %msg%n%ex</pattern>
+                <charset>UTF-8</charset>
             </encoder>
         </appender>
     </springProfile>
 
-    <springProfile name="!local">
+    <springProfile name="container">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-                <providers>
-                    <timestamp><timeZone>UTC</timeZone></timestamp>
-                    <logLevel/>
-                    <loggerName/>
-                    <threadName/>
-                    <pattern>
-                        <pattern>{"message":"%maskedMsg"}</pattern>
-                    </pattern>
-                    <mdc>
-                        <includeMdcKeyName>notification_id</includeMdcKeyName>
-                        <includeMdcKeyName>client_request_id</includeMdcKeyName>
-                        <includeMdcKeyName>client_id</includeMdcKeyName>
-                        <includeMdcKeyName>traceId</includeMdcKeyName>
-                        <includeMdcKeyName>spanId</includeMdcKeyName>
-                    </mdc>
-                    <stackTrace/>
-                </providers>
+            <encoder class="org.springframework.boot.logging.logback.StructuredLogEncoder">
+                <format>logstash</format>
+                <charset>UTF-8</charset>
             </encoder>
         </appender>
     </springProfile>
@@ -39,4 +38,5 @@
     </root>
     <logger name="org.apache.kafka" level="WARN"/>
     <logger name="org.redisson" level="WARN"/>
+    <logger name="software.amazon.awssdk" level="WARN"/>
 </configuration>
